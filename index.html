@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0C0E11">
+<title>Deck Studio | Free NJ Deck Design Tool | Santino Drafting &amp; Design</title>
+<meta name="description" content="Free NJ deck design tool. Set your dimensions, see the framing plan, deck plan, elevations and 3D, copy the takeoff, and get a flat-fee permit set from Santino Drafting &amp; Design, Toms River NJ.">
+<link rel="canonical" href="https://tool.santinodrafting.com/">
+<meta property="og:title" content="Deck Studio | Free NJ Deck Design Tool">
+<meta property="og:description" content="Design a deck, see real framing plans and elevations, and order a flat-fee NJ permit set.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://tool.santinodrafting.com/">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="script" href="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js">
+<style>
+html,body{background:#0C0E11!important;margin:0!important;padding:0!important;min-height:100vh}
+body::before{content:'LOADING DECK STUDIO...';position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);color:#F2EFE7;font:600 12px/1 "IBM Plex Mono",Menlo,monospace;letter-spacing:.24em;z-index:9998}
+body.ds-on::before{display:none}
+#ds-root{max-width:100vw;overflow-x:hidden}
+
+  :root { --ink:#0C0E11; --paper:#F2EFE7; --orange:#FF5A1F; --line:rgba(12,14,17,.35); }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--paper); color:var(--ink); font-family:'Work Sans',system-ui,sans-serif; font-size:15px; line-height:1.5; }
+  .mono { font-family:'IBM Plex Mono',ui-monospace,monospace; }
+  .disp { font-family:'Big Shoulders Display','Arial Narrow',sans-serif; }
+
+  header { border-bottom:3px solid var(--ink); background:var(--paper); position:sticky; top:0; z-index:20; }
+  .hwrap { max-width:1280px; margin:0 auto; padding:14px 20px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .brand { display:flex; align-items:baseline; gap:14px; }
+  .brand h1 { font-family:'Big Shoulders Display'; font-weight:800; font-size:28px; letter-spacing:.02em; text-transform:uppercase; }
+  .brand .sub { font-family:'IBM Plex Mono'; font-size:11px; letter-spacing:.18em; text-transform:uppercase; opacity:.75; }
+  .chip { font-family:'IBM Plex Mono'; font-size:11px; letter-spacing:.14em; text-transform:uppercase; background:var(--orange); border:2px solid var(--ink); padding:5px 10px; font-weight:600; }
+
+  .wrap { max-width:1280px; margin:0 auto; padding:22px 20px 60px; }
+  .grid { display:grid; grid-template-columns:300px minmax(0,1fr) 280px; gap:18px; align-items:start; }
+  .grid > * { min-width:0; }
+  @media (max-width:1080px){ .grid { grid-template-columns:minmax(0,1fr); } }
+
+  .card { background:var(--paper); border:2px solid var(--ink); position:relative; }
+  .card .ct { font-family:'IBM Plex Mono'; font-size:11px; letter-spacing:.16em; text-transform:uppercase; border-bottom:2px solid var(--ink); padding:9px 14px; display:flex; justify-content:space-between; align-items:center; }
+  .card .ct b { color:var(--orange); }
+  .cbody { padding:14px; }
+
+  .ctrl { margin-bottom:14px; }
+  .ctrl label { display:flex; justify-content:space-between; font-family:'IBM Plex Mono'; font-size:11.5px; letter-spacing:.08em; text-transform:uppercase; margin-bottom:5px; }
+  .ctrl label output { color:var(--orange); font-weight:600; }
+  .ctrl label .nw { display:flex; align-items:center; gap:4px; color:var(--orange); font-weight:600; }
+  .nw input { width:54px; font-family:'IBM Plex Mono',ui-monospace,monospace; font-weight:600; font-size:12.5px; color:var(--orange); background:transparent; border:1.5px solid var(--line); padding:2px 5px; text-align:right; }
+  .nw input:focus { outline:none; border-color:var(--orange); box-shadow:0 0 0 1.5px var(--orange); }
+  input[type=range]{ width:100%; accent-color:var(--orange); height:26px; }
+  .segs { display:flex; border:2px solid var(--ink); }
+  .segs button { flex:1; font-family:'IBM Plex Mono'; font-size:11.5px; letter-spacing:.08em; padding:8px 4px; background:transparent; border:none; border-right:2px solid var(--ink); cursor:pointer; text-transform:uppercase; color:var(--ink); }
+  .segs button:last-child { border-right:none; }
+  .segs button.on { background:var(--ink); color:var(--paper); font-weight:600; }
+  .tog { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--line); }
+  .tog:last-child { border-bottom:none; }
+  .tog span { font-family:'IBM Plex Mono'; font-size:11.5px; letter-spacing:.08em; text-transform:uppercase; }
+  .sw { width:44px; height:24px; border:2px solid var(--ink); background:transparent; position:relative; cursor:pointer; flex:none; }
+  .sw i { position:absolute; top:2px; left:2px; width:16px; height:16px; background:var(--ink); transition:left .12s; }
+  .sw.on { background:var(--orange); }
+  .sw.on i { left:22px; }
+
+  .tabs { display:flex; border:2px solid var(--ink); border-bottom:none; width:max-content; max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; background:var(--paper); }
+  .tabs button { flex:none; white-space:nowrap; }
+  @media (max-width:640px){ .tabs button { font-size:10px; padding:8px 8px; letter-spacing:.05em; } }
+  #tabFraming.nudge::after { content:''; display:inline-block; width:7px; height:7px; margin-left:8px; background:var(--orange); border-radius:50%; animation:dsPulse 1.3s ease-in-out infinite; vertical-align:1px; }
+  @keyframes dsPulse { 0%,100%{opacity:1} 50%{opacity:.2} }
+  .tabs button { font-family:'IBM Plex Mono'; font-size:11.5px; letter-spacing:.08em; text-transform:uppercase; padding:9px 12px; background:transparent; border:none; border-right:2px solid var(--ink); cursor:pointer; color:var(--ink); }
+  .tabs button:last-child { border-right:none; }
+  .tabs button.on { background:var(--ink); color:var(--paper); font-weight:600; }
+  .plansub { position:absolute; top:8px; right:8px; display:none; border:2px solid var(--ink); background:var(--paper); z-index:6; }
+  .plansub button { font-family:'IBM Plex Mono'; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; padding:6px 10px; background:transparent; border:none; border-right:2px solid var(--ink); cursor:pointer; color:var(--ink); }
+  .plansub button:last-child { border-right:none; }
+  .plansub button.on { background:var(--ink); color:var(--paper); font-weight:600; }
+  .tabs button.locked { opacity:.6; }
+  .tabs button.locked::after { content:'\1F512'; font-size:9px; margin-left:6px; }
+  .stage { border:2px solid var(--ink); background:#E9E5DC; position:relative; height:560px; overflow:hidden; }
+  @media (max-width:640px){ .stage { height:420px; } }
+  #three-wrap, #plan-wrap { position:absolute; inset:0; }
+  #plan-wrap { display:none; background:var(--paper); }
+  #plan-wrap svg { width:100%; height:100%; display:block; }
+  .hint { position:absolute; left:10px; bottom:8px; font-family:'IBM Plex Mono'; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; opacity:.6; pointer-events:none; }
+
+  .take { font-family:'IBM Plex Mono'; font-size:12.5px; }
+  .take .row { display:flex; justify-content:space-between; gap:8px; padding:7px 0; border-bottom:1px solid var(--line); }
+  .take .row b { font-weight:600; text-align:right; }
+  .take .row .hl { color:var(--orange); font-weight:600; }
+  .note { font-size:11px; opacity:.75; margin-top:10px; line-height:1.55; }
+
+  .cta { margin-top:16px; border:2px solid var(--ink); background:var(--ink); color:var(--paper); padding:16px 14px; }
+  .cta .disp { font-size:24px; font-weight:800; text-transform:uppercase; letter-spacing:.02em; line-height:1.05; }
+  .cta p { font-size:12.5px; margin:8px 0 12px; opacity:.85; }
+  .btn { display:inline-block; background:var(--orange); color:var(--ink); border:2px solid var(--paper); font-family:'IBM Plex Mono'; font-weight:600; font-size:13px; letter-spacing:.08em; text-transform:uppercase; padding:12px 18px; text-decoration:none; cursor:pointer; }
+  .btn.ghost { background:transparent; color:var(--paper); margin-top:8px; }
+
+  footer { border-top:2px solid var(--ink); margin-top:34px; }
+  .fwrap { max-width:1280px; margin:0 auto; padding:16px 20px; font-family:'IBM Plex Mono'; font-size:11px; letter-spacing:.04em; opacity:.8; line-height:1.7; }
+
+.seo h2 { letter-spacing:.02em; }
+</style>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebApplication","name":"Deck Studio","url":"https://tool.santinodrafting.com/","applicationCategory":"DesignApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"publisher":{"@type":"LocalBusiness","name":"Santino Drafting & Design LLC","address":{"@type":"PostalAddress","addressLocality":"Toms River","addressRegion":"NJ"},"telephone":"+19084331793","url":"https://santinodrafting.com/"}}
+</script>
+</head>
+<body>
+<div id="ds-root">
+
+<header>
+  <div class="hwrap">
+    <div class="brand">
+      <h1>Deck Studio</h1>
+      <a class="sub" href="https://santinodrafting.com/" style="color:inherit;text-decoration:none">Santino Drafting &amp; Design / Toms River NJ</a>
+    </div>
+    <span class="chip">NJ Code-Aware &middot; 2021 IRC (NJ Ed.)</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="grid">
+
+    <div class="card">
+      <div class="ct">SHT-D1 / <span>Parameters</span></div>
+      <div class="cbody">
+        <div class="ctrl"><label>Width (along house) <span class="nw"><input type="number" id="numW" min="6" max="32" step="1" value="16"> FT</span></label>
+          <input type="range" id="inW" min="6" max="32" step="1" value="16"></div>
+        <div class="ctrl"><label>Depth (out from house) <span class="nw"><input type="number" id="numD" min="4" max="20" step="1" value="12"> FT</span></label>
+          <input type="range" id="inD" min="4" max="20" step="1" value="12"></div>
+        <div class="ctrl"><label>Height above grade <span class="nw"><input type="number" id="numH" min="8" max="120" step="1" value="36"> IN</span></label>
+          <input type="range" id="inH" min="8" max="120" step="1" value="36"></div>
+        <div class="ctrl"><label>Joist spacing</label>
+          <div class="segs" id="segSpace">
+            <button data-v="16" class="on">16" OC</button>
+            <button data-v="12">12" OC</button>
+          </div></div>
+        <div class="tog"><span>Attached (ledger)</span><button class="sw on" id="swLedger"><i></i></button></div>
+        <div class="tog"><span>Two tier</span><button class="sw" id="swTier2"><i></i></button></div>
+        <div id="tier2Ctrl" style="display:none">
+          <div class="ctrl" style="margin-top:11px"><label>Lower width <span class="nw"><input type="number" id="numW2" min="4" max="24" step="1" value="10"> FT</span></label>
+            <input type="range" id="inW2" min="4" max="24" step="1" value="10"></div>
+          <div class="ctrl"><label>Lower depth (outward) <span class="nw"><input type="number" id="numD2" min="4" max="16" step="1" value="10"> FT</span></label>
+            <input type="range" id="inD2" min="4" max="16" step="1" value="10"></div>
+          <div class="ctrl"><label>Lower height <span class="nw"><input type="number" id="numH2" min="8" max="112" step="1" value="24"> IN</span></label>
+            <input type="range" id="inH2" min="8" max="112" step="1" value="24"></div>
+          <div class="ctrl"><label>Lower tier align</label>
+            <div class="segs" id="segJust2">
+              <button data-v="l">L</button>
+              <button data-v="c" class="on">CTR</button>
+              <button data-v="r">R</button>
+            </div></div>
+        </div>
+        <div class="tog"><span>Stairs</span><button class="sw on" id="swStairs"><i></i></button></div>
+        <div class="ctrl" id="stairWCtrl" style="margin:11px 0 5px"><label>Stair width</label>
+          <div class="segs" id="segStairW">
+            <button data-v="3">3'</button>
+            <button data-v="4" class="on">4'</button>
+            <button data-v="5">5'</button>
+          </div></div>
+        <div class="ctrl" id="stairPosCtrl" style="margin:11px 0 5px"><label>Stair location</label>
+          <div class="segs" id="segStairPos" style="font-size:0">
+            <button data-v="fl">L</button>
+            <button data-v="fc">CTR</button>
+            <button data-v="fr" class="on">R</button>
+            <button data-v="el">END-L</button>
+            <button data-v="er">END-R</button>
+          </div></div>
+        <div class="tog"><span>Railing</span><button class="sw on" id="swRail"><i></i></button></div>
+        <p class="note" id="railNote"></p>
+      </div>
+    </div>
+
+    <div>
+      <div class="tabs">
+        <button id="tab3d" class="on" data-v="3d">3D</button>
+        <button id="tabFraming" class="nudge" data-v="framing">Framing</button>
+        <button id="tabDeckPlan" data-v="decking">Deck Plan</button>
+        <button id="tabElevF" data-v="elevF">Front Elev</button>
+        <button id="tabElevS" data-v="elevS">Side Elev</button>
+        <button id="tabLocked" class="locked" data-v="locked" title="Drawn per job in your 18x24 permit set">Sections &amp; Details</button>
+      </div>
+      <div class="stage">
+        <div id="three-wrap"></div>
+        <div id="plan-wrap"></div>
+        <span class="hint" id="hint">Drag to orbit / pinch or scroll to zoom</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <div class="ct">SHT-D2 / <span>Takeoff</span></div>
+        <div class="cbody take" id="takeoff"></div>
+      </div>
+      <div class="cta">
+        <div class="disp">Make it a<br>permit set.</div>
+        <p>Flat fee, quoted in a day, delivered in a week. Your dimensions carry straight into the drawings.</p>
+        <a class="btn" id="btnQuote" href="#ds-quote">Get a flat quote &nbsp;$750+</a>
+        <button class="btn ghost" id="btnCopy">Copy takeoff</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="card" id="ds-quote" style="margin-top:18px">
+    <div class="ct">SHT-D3 / <span>Get your flat quote</span></div>
+    <div class="cbody">
+      <p style="font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;margin:0 0 12px">Your deck is already attached to this form — just tell me who you are. Deck sets from $750 flat, delivered in 2 to 5 business days.</p>
+      <iframe id="ds-quote-frame" src="https://api.leadconnectorhq.com/widget/form/jeeVc4yGS270PcmiL5Pz" style="width:100%;height:820px;border:none;background:#F2EFE7" loading="lazy" title="Flat quote request form"></iframe>
+    </div>
+  </div>
+</div>
+
+
+<section class="seo card" style="max-width:1280px;margin:26px auto 0;border:2px solid #0C0E11;background:#F2EFE7">
+  <div class="ct">SHT-D4 / <span>About this tool</span></div>
+  <div class="cbody" style="font-size:14px;line-height:1.65;max-width:900px">
+    <h2 style="font-family:'Big Shoulders Display';font-size:24px;text-transform:uppercase;margin:0 0 10px">A free NJ deck design &amp; framing tool from a working drafting firm</h2>
+    <p>Deck Studio lets New Jersey contractors and homeowners set deck dimensions and instantly see the framing plan, deck plan, front and side elevations, and a 3D view &mdash; with joist counts, girder rows, post and footing layout, stair risers and guard requirements computed against the 2021 IRC (NJ edition) and the AWC DCA&nbsp;6 prescriptive tables.</p>
+    <h2 style="font-family:'Big Shoulders Display';font-size:19px;text-transform:uppercase;margin:18px 0 8px">What the takeoff includes</h2>
+    <p>Joists at 16&quot; or 12&quot; on center with sizes stepped by span, (3)2x10 girders with posts held 1'-6&quot; from the deck edges, footing counts and diameters with depth left to your township (most NJ towns run 30&ndash;36&quot;), ledger and lateral-load hold-downs on attached decks, decking lineal footage with 12% waste, railing footage, and stair stringers with 8&quot; sonotube footings.</p>
+    <h2 style="font-family:'Big Shoulders Display';font-size:19px;text-transform:uppercase;margin:18px 0 8px">From design to a permit set</h2>
+    <p>Everything on screen is preliminary and not for construction. When you're ready to build, <a href="https://santinodrafting.com/" style="color:inherit">Santino Drafting &amp; Design</a> turns your exact dimensions into a full 18&quot;x24&quot; residential permit set &mdash; framing and footing plan, deck plan, elevations, sections and connection details &mdash; drawn to what your NJ township asks for, at a flat fee from $500, typically back in 2&ndash;5 business days. Serving all 21 New Jersey counties from Toms River.</p>
+  </div>
+</section>
+
+<footer><div class="fwrap">
+  PRELIMINARY VISUALIZATION ONLY. NOT CONSTRUCTION DOCUMENTS. Member sizes and spans shown are planning estimates; the final permit set verifies all framing against the current NJ code for your township. Some projects require a licensed professional's seal. Santino Drafting &amp; Design LLC is a drafting service, not an architecture or engineering firm.
+  <br>Deck, screen room, basement and addition permit sets: <a href="https://santinodrafting.com/" style="color:inherit">santinodrafting.com</a> &middot; (908) 433-1793
+</div></footer>
+
+
+</div>
+<script src="app.js" defer></script>
+</body>
+</html>

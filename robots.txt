@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://tool.santinodrafting.com/sitemap.xml
