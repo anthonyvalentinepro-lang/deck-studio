@@ -519,7 +519,7 @@ function renderTakeoff(){
       ['Blocking', K.blocking ? K.blocking+' pcs @ mid-span' : 'not req’d at this span'],
       ['Posts 6x6 PT', K.posts + (K.landingPosts ? ' + '+K.landingPosts+' landing' : '')],
       ['Footings', K.footingsMain+' @ '+c.dia+'" dia'],
-      ['Footing depth', 'per township (30–36" typ)'],
+      ['Footing depth', '36" below grade'],
       ['Decking', '~'+c.deckLF+' LF (5-1/2" bd)'],
       ['Fascia', '~'+K.fasciaLF+' LF'],
     ];
@@ -546,7 +546,7 @@ function renderTakeoff(){
       ['Blocking', K.blocking ? K.blocking+' pcs @ mid-span' : 'not req’d at this span'],
       ['Posts 6x6 PT', K.posts + (K.landingPosts ? ' + '+K.landingPosts+' landing' : '')],
       ['Footings', K.footStr],
-      ['Footing depth', 'per township (30–36" typ)'],
+      ['Footing depth', '36" below grade'],
       ['Decking', '~'+c.deckLF+' LF (5-1/2" bd)'],
       ['Fascia', '~'+K.fasciaLF+' LF'],
     ];
@@ -572,7 +572,7 @@ function renderTakeoff(){
     return '<div class="row"><span>'+r[0]+'</span><b class="'+(i<2?'hl':'')+'">'+r[1]+'</b></div>';
   }).join('') + '<p class="note">'
     + note
-    + 'Hardware counts are placement counts — exact connector models, fasteners and schedules are specified in your permit set. Framing #2 SYP pressure-treated. Decking includes 12% waste (more for diagonal or picture-frame layouts). Footing depth is set by your township — most NJ towns run 30–36 in; your permit set uses your township’s number. Footings sized for 1,500 psf soil. Planning numbers for pricing and visualization. Final sizes are set in your permit drawings.</p>';
+    + 'Hardware counts are placement counts — exact connector models, fasteners and schedules are specified in your permit set. Framing #2 SYP pressure-treated. Decking includes 12% waste (more for diagonal or picture-frame layouts). Footings are drawn 36 in below grade — at or below frost depth for NJ townships; your permit set confirms your town’s exact requirement. Footings sized for 1,500 psf soil. Planning numbers for pricing and visualization. Final sizes are set in your permit drawings.</p>';
   document.getElementById('railNote').textContent = c.tier2
     ? (c.guardReq || c.guardLo ? 'Tier surfaces over 30 inches above grade: guards are required by code.' : 'Both tiers under 30 inches: guards optional in most towns.')
     : (c.guardReq
@@ -587,13 +587,13 @@ function takeoffText(){
     ? ('SANTINO DECK STUDIO takeoff\n'
     + 'Deck '+S.w+' ft x '+S.d+' ft, '+S.h+' in above grade, '+(S.ledger?'attached (ledger)':'freestanding')+'\n'
     + 'Joists '+c.joists+' @ '+c.jsize+' '+S.spacing+'in OC, Simpson hangers'+(c.needMid?' (2 spans, mid girder added)':'')+' / Girders '+c.beamRows+' x (3)2x10 typ'+(c.spliced?' (spliced over posts)':'')+'\n'
-    + 'Footings '+model().counts.footingsMain+' @ '+c.dia+'in dia, depth per township (30-36in typ), blocking + hanger/hold-down placement per model'+(S.ledger?' / Ledger '+c.jsize+' PT, lags 16in OC':'')+'\n'
+    + 'Footings '+model().counts.footingsMain+' @ '+c.dia+'in dia, 36in below grade, blocking + hanger/hold-down placement per model'+(S.ledger?' / Ledger '+c.jsize+' PT, lags 16in OC':'')+'\n'
     + 'Decking ~'+c.deckLF+' LF incl 12% waste'+(S.rail?' / Railing ~'+c.railLF+' LF':'')+(S.stairs?' / Stairs '+S.stairW+'ft wide, '+c.risers+' risers'+(c.swb?', switchback w/ mid landing':''):'')+'\n'
     + 'Quote: https://santinodrafting.com/#quote')
     : ('SANTINO DECK STUDIO takeoff (two tier)\n'
     + 'Upper '+S.w+' ft x '+S.d+' ft at '+S.h+' in, '+(S.ledger?'attached (ledger)':'freestanding')+' / Lower '+S.w2+' ft x '+S.d2+' ft at '+c.h2e+' in, on shared posts\n'
     + 'Joists upper '+c.up.joists+' @ '+c.up.jsize+', lower '+c.lo.joists+' @ '+c.lo.jsize+', '+S.spacing+'in OC, Simpson hangers / Girders '+c.girderMembers+' x (3)2x10 typ\n'
-    + 'Footings '+footStr(c).replace(/"/g,'in')+', depth per township (30-36in typ), shared row upsized'+(S.ledger?' / Ledger '+c.up.jsize+' PT, lags 16in OC':'')+'\n'
+    + 'Footings '+footStr(c).replace(/"/g,'in')+', 36in below grade, shared row upsized'+(S.ledger?' / Ledger '+c.up.jsize+' PT, lags 16in OC':'')+'\n'
     + 'Decking ~'+c.deckLF+' LF'+(S.rail?' / Railing ~'+c.railLF+' LF':'')
     + (c.tierRisers?' / Tier stair '+c.tg.tierSw+'ft wide, '+c.tierRisers+' risers':'')
     + (S.stairs && c.gsp?' / Grade stair '+c.gsp.sw+'ft wide, '+c.gradeRisers+' risers'+(c.swb?', switchback w/ mid landing':''):'')+'\n'
@@ -1763,7 +1763,7 @@ function renderElevation(kind){
     tx((x0+dw/2), TY+11, 'PROPOSED DECK', DF, 'middle');
     if (S.rail) vdim(RX, deckTop-3.0*SV, deckTop, '36"');
     vdim(RX, deckTop, GY, S.h+'"');
-    vdim(RX, GY, GY+30, '30"-36"');
+    vdim(RX, GY, GY+30, '36"');
     if (c.tier2 && loTop!==null) vdim(RX+26, loTop, GY, c.h2e+'"');
     hdim(px1st-0.45*SV, px1st+0.45*SV, BY+14, Math.round(c.dia)+'"', null);
   } else {
@@ -1830,7 +1830,7 @@ function renderElevation(kind){
       hdim(faceX, faceX+dpx, BY+26, S.d+"'-0\"", null);
       if (S.rail) vdim(RX, deckTop-3.0*SV, deckTop, '36"');
       vdim(RX, deckTop, GY, S.h+'"');
-      vdim(RX, GY, GY+30, '30"-36"');
+      vdim(RX, GY, GY+30, '36"');
     } else {
       const d2px=S.d2*SV, loTop=GY-h2ft*SV;
       ln(faceX+dpx, loTop, faceX+dpx+d2px, loTop, 2.5);
@@ -1869,7 +1869,7 @@ function renderElevation(kind){
       hdim(faceX+dpx, faceX+dpx+d2px, BY, S.d2+"'-0\"", null);
       if (S.rail) vdim(RX, deckTop-3.0*SV, deckTop, '36"');
       vdim(RX, deckTop, GY, S.h+'"');
-      vdim(RX, GY, GY+30, '30"-36"');
+      vdim(RX, GY, GY+30, '36"');
       vdim(RX+26, loTop, GY, c.h2e+'"');
     }
   }
