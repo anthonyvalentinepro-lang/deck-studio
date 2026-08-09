@@ -900,6 +900,13 @@ function renderPlan(){
   // ledger or rim at top
   if (S.ledger){
     s += '<rect x="'+(x0-30)+'" y="'+(y0-14)+'" width="'+(dw+60)+'" height="14" fill="url(#hatch)" stroke="#0C0E11" stroke-width="1.5"/>';
+    if (MODE==='decking'){
+      // existing door + swing onto the deck (geometry, not annotation)
+      const dpxD = x0 + dw/4, dr = 3*sc;
+      s += '<rect x="'+(dpxD-dr/2)+'" y="'+(y0-13)+'" width="'+dr+'" height="12" fill="#F2EFE7"/>';
+      s += '<line x1="'+(dpxD-dr/2)+'" y1="'+y0+'" x2="'+(dpxD-dr/2)+'" y2="'+(y0+dr)+'" stroke="#0C0E11" stroke-width="1.2"/>';
+      s += '<path d="M'+(dpxD-dr/2)+' '+(y0+dr)+' A'+dr+' '+dr+' 0 0 0 '+(dpxD+dr/2)+' '+y0+'" fill="none" stroke="#0C0E11" stroke-width="0.7" opacity="0.7"/>';
+    }
   }
   // outline
   s += '<rect x="'+x0+'" y="'+y0+'" width="'+dw+'" height="'+dd+'" fill="none" stroke="#0C0E11" stroke-width="2.5"/>';
@@ -1031,7 +1038,30 @@ function renderPlan(){
   // railing: inset guard line on railed edges, broken at the stair (deck plan mode)
   if (MODE==='decking' && S.rail){
     const ro = 5;
-    const rseg = function(x1,y1,x2,y2){ s += '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="#0C0E11" stroke-width="1.1" opacity="0.8"/>'; };
+    // railing per drafting standard: double rail line with hollow post squares <= 6'-0" OC
+    const psq2 = Math.max(4, 0.46*sc), rw = Math.max(2.2, 0.25*sc);
+    const rseg = function(x1,y1,x2,y2){
+      const vert = Math.abs(x2-x1) < 0.5;
+      const len = vert ? (y2-y1) : (x2-x1); if (len < 3) return;
+      if (vert){
+        const off = (x1 < x0+dw/2) ? 1 : -1;
+        s += '<line x1="'+x1+'" y1="'+y1+'" x2="'+x1+'" y2="'+y2+'" stroke="#0C0E11" stroke-width="1.1" opacity="0.85"/>';
+        s += '<line x1="'+(x1+off*rw)+'" y1="'+y1+'" x2="'+(x1+off*rw)+'" y2="'+y2+'" stroke="#0C0E11" stroke-width="0.8" opacity="0.85"/>';
+      } else {
+        const off = (y1 < y0+dd/2) ? 1 : -1;
+        s += '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y1+'" stroke="#0C0E11" stroke-width="1.1" opacity="0.85"/>';
+        s += '<line x1="'+x1+'" y1="'+(y1+off*rw)+'" x2="'+x2+'" y2="'+(y1+off*rw)+'" stroke="#0C0E11" stroke-width="0.8" opacity="0.85"/>';
+      }
+      const nP2 = Math.max(2, Math.ceil(Math.abs(len)/(6*sc))+1);
+      for (let p3=0;p3<nP2;p3++){
+        let t4 = p3/(nP2-1);
+        const cx4 = vert ? x1 : (x1 + t4*len);
+        const cy4 = vert ? (y1 + t4*len) : y1;
+        const px4 = Math.min(Math.max(cx4, x0+ro+psq2/2), x0+dw-ro-psq2/2);
+        const py4 = Math.min(Math.max(cy4, y0+ro+psq2/2), y0+dd-ro-psq2/2);
+        s += '<rect x="'+((vert?px4:cx4)-psq2/2)+'" y="'+((vert?cy4:py4)-psq2/2)+'" width="'+psq2+'" height="'+psq2+'" fill="#F2EFE7" stroke="#0C0E11" stroke-width="1.2"/>';
+      }
+    };
     const cutE = planSp ? planSp.edge : null;
     const cu0 = planSp ? ((cutE==='front') ? x0+(planSp.c-planSp.sw/2+S.w/2)*sc : y0+(planSp.c-planSp.sw/2+S.d/2)*sc) : 0;
     const cu1 = planSp ? cu0 + planSp.sw*sc : 0;
@@ -1330,7 +1360,28 @@ function renderPlanTier2(c, W, H, m, availW, availH){
   // railing: inset guard lines; upper cut at the tier stair, lower cut at the grade stair (deck plan)
   if (MODE==='decking' && S.rail){
     const ro = 5;
-    const rseg = function(x1,y1,x2,y2){ s += '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="#0C0E11" stroke-width="1.1" opacity="0.8"/>'; };
+    const midX2 = (X(-w/2)+X(w/2))/2, midY2 = (Y(-d/2)+Y(d/2+d2))/2;
+    const psq3 = Math.max(4, 0.46*sc), rw3 = Math.max(2.2, 0.25*sc);
+    const rseg = function(x1,y1,x2,y2){
+      const vert = Math.abs(x2-x1) < 0.5;
+      const len = vert ? (y2-y1) : (x2-x1); if (len < 3) return;
+      if (vert){
+        const off = (x1 < midX2) ? 1 : -1;
+        s += '<line x1="'+x1+'" y1="'+y1+'" x2="'+x1+'" y2="'+y2+'" stroke="#0C0E11" stroke-width="1.1" opacity="0.85"/>';
+        s += '<line x1="'+(x1+off*rw3)+'" y1="'+y1+'" x2="'+(x1+off*rw3)+'" y2="'+y2+'" stroke="#0C0E11" stroke-width="0.8" opacity="0.85"/>';
+      } else {
+        const off = (y1 < midY2) ? 1 : -1;
+        s += '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y1+'" stroke="#0C0E11" stroke-width="1.1" opacity="0.85"/>';
+        s += '<line x1="'+x1+'" y1="'+(y1+off*rw3)+'" x2="'+x2+'" y2="'+(y1+off*rw3)+'" stroke="#0C0E11" stroke-width="0.8" opacity="0.85"/>';
+      }
+      const nP3 = Math.max(2, Math.ceil(Math.abs(len)/(6*sc))+1);
+      for (let p4=0;p4<nP3;p4++){
+        const t5 = p4/(nP3-1);
+        let cx5 = vert ? x1 : (x1 + t5*len + (p4===0? psq3/2 : (p4===nP3-1? -psq3/2 : 0)));
+        let cy5 = vert ? (y1 + t5*len + (p4===0? psq3/2 : (p4===nP3-1? -psq3/2 : 0))) : y1;
+        s += '<rect x="'+(cx5-psq3/2)+'" y="'+(cy5-psq3/2)+'" width="'+psq3+'" height="'+psq3+'" fill="#F2EFE7" stroke="#0C0E11" stroke-width="1.2"/>';
+      }
+    };
     // upper rect
     const ux0=X(-w/2), ux1=X(w/2), uy0=Y(-d/2), uy1=Y(d/2);
     rseg(ux0+ro, uy0+ro, ux0+ro, uy1-ro); rseg(ux1-ro, uy0+ro, ux1-ro, uy1-ro);
@@ -1442,15 +1493,31 @@ function renderElevation(kind){
   };
   const railFront = function(xa,xb,rt){
     const topY = rt - 3.0*SV, botY = rt - 0.35*SV;
-    ln(xa,topY,xb,topY,2.2); ln(xa,botY,xb,botY,1.4);
-    for (let bx=xa+0.38*SV; bx<xb; bx+=0.38*SV){ ln(bx,botY,bx,topY,0.6,null,0.65); }
+    const capH = Math.max(2.5, 0.16*SV), subH = Math.max(2, 0.11*SV), botH = Math.max(2, 0.12*SV);
+    // top rail: cap over sub-rail
+    rc(xa, topY, xb-xa, capH, 1.5, null, '#F2EFE7');
+    rc(xa+1, topY+capH, xb-xa-2, subH, 1.1, null, '#F2EFE7');
+    // bottom rail
+    rc(xa+1, botY-botH, xb-xa-2, botH, 1.1, null, '#F2EFE7');
+    // balusters: wide flat pickets between sub-rail and bottom rail
+    const bw = Math.max(1.6, 0.12*SV), pitch = Math.max(bw*2.1, 0.34*SV);
+    const byT = topY+capH+subH, byB = botY-botH;
+    for (let bx=xa+pitch*0.6; bx<xb-bw-1; bx+=pitch){ rc(bx, byT, bw, byB-byT, 0.9, null, '#F2EFE7'); }
     const span = xb-xa, nP = Math.max(2, Math.ceil(span/(6*SV))+1);
-    const hp = 0.16*SV;
+    const hp = Math.max(2.2, 0.17*SV);
+    // bottom-rail support blocks at midspans
+    for (let i2=0;i2<nP-1;i2++){
+      const mx = xa + (i2+0.5)*(span/(nP-1));
+      rc(mx-0.08*SV, botY, 0.16*SV, rt-botY, 1, null, '#F2EFE7');
+    }
+    // posts: body + layered cap + base collar (solid: rails die into them)
     for (let i2=0;i2<nP;i2++){
       let px2 = xa + i2*(span/(nP-1));
       px2 = Math.min(Math.max(px2, xa+hp), xb-hp);
-      rc(px2-hp, topY-4, 2*hp, rt-topY+4, 1.4, null, '#F2EFE7');
-      rc(px2-0.21*SV, topY-8, 0.42*SV, 4, 1.2, null, '#F2EFE7');
+      rc(px2-hp, topY-3, 2*hp, rt-topY+3, 1.4, null, '#F2EFE7');
+      rc(px2-hp-0.045*SV, topY-6, 2*hp+0.09*SV, 3.2, 1.2, null, '#F2EFE7');
+      rc(px2-hp-0.075*SV, topY-9, 2*hp+0.15*SV, 3.2, 1.2, null, '#F2EFE7');
+      rc(px2-hp-0.055*SV, rt-Math.max(3,0.22*SV), 2*hp+0.11*SV, Math.max(3,0.22*SV), 1.2, null, '#F2EFE7');
     }
   };
   const deckBand = function(xa,xb,topZ){
