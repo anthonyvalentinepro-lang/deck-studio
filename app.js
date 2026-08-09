@@ -83,7 +83,7 @@ function calcDeck(w, d, ledgered, extraSpan){
   // DCA6: cantilever may not exceed 1/4 of the back-span; his standard 1'-6" applies
   // whenever the deck is deep enough, and clamps down automatically for shallow decks
   const cant = ledgered ? Math.min(1.5, d/5) : Math.min(1.5, d/6);
-  const joists = Math.floor(w*12/S.spacing)+1;
+  const joists = Math.ceil(w*12/S.spacing - 0.001)+1;
   const spanTotal = Math.max(2, d - (ledgered ? cant : 2*cant) + (extraSpan||0));
   const maxJ = 14 * (S.spacing===12 ? 1.13 : 1.0);
   const needMid = spanTotal > maxJ;
@@ -99,13 +99,14 @@ function calcDeck(w, d, ledgered, extraSpan){
     perRow: perRow, postSp: postSp, dia: dia, footings: perRow*beamRows, spliced: w > 20, cant: cant };
 }
 function calc(){
+  sanitizeS();
   const up = calcDeck(S.w, S.d, S.ledger, 0);
   if (!S.tier2){
     const area = S.w*S.d;
     const deckLF = Math.round(area*12/5.5*1.12);
     const spc = stairPlace();
     const railLF = S.rail ? Math.max(0, (S.ledger ? S.w + 2*S.d : 2*S.w + 2*S.d) - (spc ? spc.sw : 0)) : 0;
-    const risers = S.stairs ? Math.max(2, Math.ceil(S.h/7.5)) : 0;
+    const risers = S.stairs ? Math.max(2, Math.ceil((S.h+0.5)/7.5)) : 0;
     const swb = S.stairs && risers > 12;
     return { tier2:false, cant:up.cant, joists:up.joists, jsize:up.jsize, beamRows:up.beamRows, perRow:up.perRow,
       footings:up.footings, area:area, deckLF:deckLF, railLF:railLF, risers:risers,
@@ -121,11 +122,11 @@ function calc(){
   let sharedDia = diaFor(Math.max(0.5,S.w-3)/(sharedPer-1), sharedTrib);
   while (sharedDia > 20 && sharedPer < 8){ sharedPer++; sharedDia = diaFor(Math.max(0.5,S.w-3)/(sharedPer-1), sharedTrib); }
   const drop = S.h - h2e;
-  const tierRisers = drop >= 4 ? Math.max(2, Math.ceil(drop/7.5)) : 0;
+  const tierRisers = drop >= 4 ? Math.max(2, Math.ceil((drop+0.5)/7.5)) : 0;
   const tierRun = tierRisers * (11/12);
   const tierOver = tierRisers > 0 && tierRun > S.d2 - 1;
   const gsp = stairPlace(S.w2, S.d2);
-  const gradeRisers = S.stairs ? Math.max(2, Math.ceil(h2e/7.5)) : 0;
+  const gradeRisers = S.stairs ? Math.max(2, Math.ceil((h2e+0.5)/7.5)) : 0;
   const gswb = S.stairs && gradeRisers > 12;
   const girderMembers = up.beamRows + lo.beamRows + 1;
   const footTotal = sharedPer + (up.beamRows - 1)*up.perRow + lo.footings;
@@ -193,6 +194,7 @@ function resolve(){
       add('decking','box',{x:ox, y:hft, z:oz - d/2 + boardW/2 + i*boardW, dx:w, dy:t, dz:boardW-0.06, tier:tier, m:{alt:i%2}});
     // rim joist (outer face) stays structural; fascia covers it
     add('joist','box',{x:ox, y:hft-0.36, z:oz + d/2 - 0.07, dx:w, dy:0.62, dz:0.13, tier:tier, m:{rim:true}});
+    if (!attached) add('joist','box',{x:ox, y:hft-0.36, z:oz - d/2 + 0.07, dx:w, dy:0.62, dz:0.13, tier:tier, m:{rim:true}});
     add('fascia','box',{x:ox, y:hft-0.34, z:oz + d/2 + 0.02, dx:w, dy:0.68, dz:0.06, tier:tier});
     add('fascia','box',{x:ox - w/2 - 0.02, y:hft-0.34, z:oz, dx:0.06, dy:0.68, dz:d, tier:tier});
     add('fascia','box',{x:ox + w/2 + 0.02, y:hft-0.34, z:oz, dx:0.06, dy:0.68, dz:d, tier:tier});
@@ -209,6 +211,8 @@ function resolve(){
       if (x > w/2) break;
       xs.push(Math.min(x, w/2-0.07));
     }
+    // widths that aren't a spacing multiple still need a joist at the far edge
+    if (xs.length && (w/2-0.07) - xs[xs.length-1] > 0.2) xs.push(w/2-0.07);
     xs.forEach(function(x){
       add('joist','box',{x:ox+x, y:hft-0.36, z:oz - jExt/2, dx:0.13, dy:0.62, dz:d + jExt, tier:tier, m:{size:cd.jsize}});
       if (attached) add('hw','box',{x:ox+x, y:hft-0.42, z:oz - d/2 + 0.16, dx:0.2, dy:0.34, dz:0.06, tier:tier, m:{kind:'hanger'}});
@@ -234,7 +238,8 @@ function resolve(){
     });
     // beams + posts + footings + post bases
     rows.forEach(function(rs){
-      add('beam','box',{x:ox, y:hft-0.85, z:oz+rs.z, dx:Math.max(1, w-2), dy:0.8, dz:0.42, tier:tier, m:Object.assign({plies:3, size:'2x10'}, rs.m||{})});
+      const beamY = Math.max(0.45, hft-0.85);
+      add('beam','box',{x:ox, y:beamY, z:oz+rs.z, dx:Math.max(1, w-1.2), dy:0.8, dz:0.42, tier:tier, m:Object.assign({plies:3, size:'2x10'}, rs.m||{})});
       if (rs.noPosts) return;
       const per = rs.per;
       for (let p2=0;p2<per;p2++){
@@ -254,7 +259,7 @@ function resolve(){
       const parts = cutHere
         ? [{a:-L/2, b:cutHere.c - cutHere.sw/2}, {a:cutHere.c + cutHere.sw/2, b:L/2}]
         : [{a:-L/2, b:L/2}];
-      parts.forEach(function(pp){ if (pp.b - pp.a > 0.4) out.push({axis:axis, at:at, a:pp.a, b:pp.b}); });
+      parts.forEach(function(pp){ if (pp.b - pp.a > 0.15) out.push({axis:axis, at:at, a:pp.a, b:pp.b}); });
     };
     addEdge('x', d/2, w, (cut && cut.edge==='front') ? cut : null);
     addEdge('z', -w/2, d, (cut && cut.edge==='left') ? cut : null);
@@ -262,13 +267,14 @@ function resolve(){
     if (includeBack) addEdge('x', -d/2, w, null);
     return out;
   }
-  function railing(tier, w, d, hft, cut, includeBack, ox, oz){
+  function railing(tier, w, d, hft0, cut, includeBack, ox, oz){
+    const hft = hft0 + 1/24;   // guard heights measure from the walking surface (decking top)
     const railTop = 3.0, botY = 0.35;
     railSegs(w, d, cut, includeBack).forEach(function(sg0){
       // post sleeves mount on the deck surface: pull the run inboard so the outer post face
       // lands flush with the fascia instead of overhanging it
       const sg = {axis:sg0.axis, at:sg0.at - Math.sign(sg0.at)*0.12, a:sg0.a, b:sg0.b};
-      const len = sg.b - sg.a; if (len < 0.8) return;
+      const len = sg.b - sg.a; if (len < 0.15) return;
       const mid = (sg.a + sg.b)/2;
       const P = function(off){ return sg.axis==='x' ? {x:ox+off, z:oz+sg.at} : {x:ox+sg.at, z:oz+off}; };
       const mp = P(mid);
@@ -314,9 +320,7 @@ function resolve(){
           dx:0.13, dy:rise*0.9, dz:runL*0.78, tier:tier, m:{step:k}});
       }
     }
-    // treated kicker at the flight base ties the stringer feet to the sonotube pads
-    T.push({t:'stringer', sh:'box', lx:cx, ly:0.3, lz:z0 + dir*(runT - 0.35),
-      dx:sw, dy:0.14, dz:0.4, tier:tier, m:{kicker:true}});
+
     // closed flight: risers span rise-to-rise (no see-through), treads sit on top with a nosing
     for (let st=0; st<n; st++){
       T.push({t:'tread', sh:'box', lx:cx, ly:yTop - rise*st - rise/2, lz:z0 + dir*(st*runL) + dir*0.04,
@@ -332,7 +336,7 @@ function resolve(){
           T.push({t:'rail', sh:'box', lx:hx, ly:yTop - drop/2 + hy, lz:z0 + dir*runT/2,
             dx:0.12, dy:0.12, dz:slope, rotX:ang, tier:tier, m:{pos:'stair'}});
         });
-        const nB = Math.max(2, Math.floor(runT/0.38));
+        const nB = Math.max(2, Math.ceil(runT/0.32));
         for (let k=1;k<nB;k++){
           const bz = k*(runT/nB);
           T.push({t:'baluster', sh:'box', lx:hx, ly:yTop - drop*(bz/runT) + 0.42 + 1.19, lz:z0 + dir*bz,
@@ -343,8 +347,10 @@ function resolve(){
   }
   // full stair assembly off one platform edge in local frame, then transformed to world
   function stairs(tier, wF, dF, hIn, sp, railOn, ox, oz){
-    const risers = Math.max(2, Math.ceil(hIn/7.5));
-    const hft = hIn/12, rise = hft/risers, runL = 11/12, sw = sp.sw;
+    // datum = walking surface (decking top), so every rise incl. the top step is uniform
+    const wsIn = hIn + 0.5;
+    const risers = Math.max(2, Math.ceil(wsIn/7.5));
+    const hft = wsIn/12, rise = hft/risers, runL = 11/12, sw = sp.sw;
     const ron = railOn;   // caller passes the code-resolved handrail/guard requirement
     const swb = risers > 12;
     const T = [];   // local components with lx/ly/lz
@@ -353,8 +359,10 @@ function resolve(){
     T.push({t:'stairhdr', sh:'box', lx:0, ly:hft-0.36, lz:-0.24, dx:sw+0.5, dy:0.62, dz:0.13, tier:tier, m:{plies:2}});
     if (!swb){
       flight(tier, T, risers, rise, sw, hft, 0, 0, 1, ron);
+      T.push({t:'stringer', sh:'box', lx:0, ly:0.3, lz:risers*runL - 0.35, dx:sw, dy:0.14, dz:0.4, tier:tier, m:{kicker:true}});
       [-(sw/2-0.45), sw/2-0.45].forEach(function(fx){
-        T.push({t:'footing', sh:'cyl', lx:fx, ly:0.11, lz:risers*runL - 0.35, r:0.34, len:0.22, tier:tier, m:{dia:8, kind:'sono'}});
+        const sd = (risers > 10 || sw >= 5) ? 10 : 8;
+        T.push({t:'footing', sh:'cyl', lx:fx, ly:0.11, lz:risers*runL - 0.35, r:sd/24, len:0.22, tier:tier, m:{dia:sd, kind:'sono'}});
       });
       if (ron) [-sw/2, sw/2].forEach(function(hx){
         T.push({t:'railpost', sh:'box', lx:hx, ly:1.47, lz:risers*runL - 0.1, dx:0.2, dy:2.95, dz:0.2, tier:tier, m:{}});
@@ -366,27 +374,27 @@ function resolve(){
       const ex = sp.ext || 1;
       flight(tier, T, n1, rise, sw, hft, 0, 0, 1, ron);
       // landing platform on 4 posts with sonotube pads
-      T.push({t:'decking', sh:'box', lx:ex*sw/2, ly:yLand, lz:len1 + Ld/2, dx:2*sw, dy:2/12, dz:Ld, tier:tier, m:{landing:true}});
+      T.push({t:'decking', sh:'box', lx:ex*sw/2, ly:yLand - 1/12, lz:len1 + Ld/2, dx:2*sw, dy:2/12, dz:Ld, tier:tier, m:{landing:true}});
       T.push({t:'stairhdr', sh:'box', lx:ex*sw/2, ly:yLand - 0.32, lz:len1 + 0.1, dx:2*sw, dy:0.55, dz:0.16, tier:tier, m:{plies:1, landing:true}});
       [ex*sw/2 - sw + 0.25, ex*sw/2 + sw - 0.25].forEach(function(px){
         [len1 + 0.25, len1 + Ld - 0.25].forEach(function(pz){
           T.push({t:'post', sh:'box', lx:px, ly:yLand/2, lz:pz, dx:0.4, dy:Math.max(0.4, yLand - 0.05), dz:0.4, tier:tier, m:{landing:true}});
           T.push({t:'hw', sh:'box', lx:px, ly:0.27, lz:pz, dx:0.46, dy:0.07, dz:0.46, tier:tier, m:{kind:'postbase'}});
-          T.push({t:'footing', sh:'cyl', lx:px, ly:0.11, lz:pz, r:0.34, len:0.22, tier:tier, m:{dia:8, kind:'sono'}});
+          T.push({t:'footing', sh:'cyl', lx:px, ly:0.11, lz:pz, r:0.5, len:0.22, tier:tier, m:{dia:12, kind:'sono'}});
         });
       });
       if (ron && yLand > 2.5){
         // landing guards: far edge + both sides (rails + balusters + corner posts)
         const guard = function(len, cxg, czg, alongX){
           if (alongX){
-            T.push({t:'rail', sh:'box', lx:cxg, ly:yLand+2.9, lz:czg, dx:len, dy:0.15, dz:0.22, tier:tier, m:{pos:'top'}});
+            T.push({t:'rail', sh:'box', lx:cxg, ly:yLand+3.07, lz:czg, dx:len, dy:0.15, dz:0.22, tier:tier, m:{pos:'top'}});
             T.push({t:'rail', sh:'box', lx:cxg, ly:yLand+0.4, lz:czg, dx:len, dy:0.10, dz:0.16, tier:tier, m:{pos:'bottom'}});
-            const nB = Math.floor(len/0.38);
+            const nB = Math.max(2, Math.ceil(len/0.32));
             for (let k=1;k<nB;k++) T.push({t:'baluster', sh:'box', lx:cxg - len/2 + k*(len/nB), ly:yLand + 0.45 + 1.15, lz:czg, dx:0.08, dy:2.3, dz:0.08, tier:tier, m:{}});
           } else {
-            T.push({t:'rail', sh:'box', lx:cxg, ly:yLand+2.9, lz:czg, dx:0.22, dy:0.15, dz:len, tier:tier, m:{pos:'top'}});
+            T.push({t:'rail', sh:'box', lx:cxg, ly:yLand+3.07, lz:czg, dx:0.22, dy:0.15, dz:len, tier:tier, m:{pos:'top'}});
             T.push({t:'rail', sh:'box', lx:cxg, ly:yLand+0.4, lz:czg, dx:0.16, dy:0.10, dz:len, tier:tier, m:{pos:'bottom'}});
-            const nB = Math.floor(len/0.38);
+            const nB = Math.max(2, Math.ceil(len/0.32));
             for (let k=1;k<nB;k++) T.push({t:'baluster', sh:'box', lx:cxg, ly:yLand + 0.45 + 1.15, lz:czg - len/2 + k*(len/nB), dx:0.08, dy:2.3, dz:0.08, tier:tier, m:{}});
           }
         };
@@ -400,8 +408,10 @@ function resolve(){
       }
       // return flight beside the first, descending back toward the deck face
       flight(tier, T, n2, rise, sw, yLand, ex*sw, len1, -1, ron);
+      T.push({t:'stringer', sh:'box', lx:ex*sw, ly:0.3, lz:len1 - n2*runL + 0.35, dx:sw, dy:0.14, dz:0.4, tier:tier, m:{kicker:true}});
       [ex*sw - (sw/2-0.45), ex*sw + (sw/2-0.45)].forEach(function(fx){
-        T.push({t:'footing', sh:'cyl', lx:fx, ly:0.11, lz:len1 - n2*runL + 0.4, r:0.34, len:0.22, tier:tier, m:{dia:8, kind:'sono'}});
+        const sd2 = (n2 > 10 || sw >= 5) ? 10 : 8;
+        T.push({t:'footing', sh:'cyl', lx:fx, ly:0.11, lz:len1 - n2*runL + 0.4, r:sd2/24, len:0.22, tier:tier, m:{dia:sd2, kind:'sono'}});
       });
       if (ron) [ex*sw - sw/2, ex*sw + sw/2].forEach(function(hx){
         T.push({t:'railpost', sh:'box', lx:hx, ly:1.47, lz:len1 - n2*runL + 0.1, dx:0.2, dy:2.95, dz:0.2, tier:tier, m:{}});
@@ -485,7 +495,11 @@ function resolve(){
     railposts: n('railpost', function(q){ return !q.m.cap; }),
     fasciaLF: Math.round(C.filter(function(q){ return q.t==='fascia'; }).reduce(function(a,q){ return a + Math.max(q.dx,q.dz); },0)),
     flashingLF: Math.round(C.filter(function(q){ return q.t==='flashing'; }).reduce(function(a,q){ return a + q.dx; },0)),
-    treads: n('tread', function(q){ return q.m.kind==='tread'; })
+    treads: n('tread', function(q){ return q.m.kind==='tread'; }),
+    risersN: n('tread', function(q){ return q.m.kind==='riser'; }),
+    rims: n('joist', function(q){ return q.m.rim; }),
+    stringersT1: n('stringer', function(q){ return q.m.step===undefined && !q.m.kicker && q.tier===1; }),
+    stringersT2: n('stringer', function(q){ return q.m.step===undefined && !q.m.kicker && q.tier===2; })
   };
   // footings grouped by diameter for the takeoff line
   const diaMap = {};
@@ -502,7 +516,7 @@ const MQ = {
   joistXs: function(tier){ return model().C.filter(function(q){ return q.t==='joist' && !q.m.rim && !q.stair && q.tier===tier; }).map(function(q){ return q.x; }); },
   beamZs:  function(tier){ return model().C.filter(function(q){ return q.t==='beam' && q.tier===tier && !q.m.shared; }).map(function(q){ return q.z; }); },
   postsAt: function(tier, z){ return model().C.filter(function(q){ return q.t==='post' && !q.m.landing && q.tier===tier && Math.abs(q.z-z)<0.3; }).map(function(q){ return q.x; }); },
-  blockZs: function(tier){ const zs={}; model().C.forEach(function(q){ if (q.t==='blocking' && q.tier===tier) zs[Math.round(q.z*4)/4]=1; }); return Object.keys(zs).map(Number); },
+  blockZs: function(tier){ const zs={}; model().C.forEach(function(q){ if (q.t==='blocking' && q.tier===tier) zs[Math.round(q.z*2)/2]=1; }); return Object.keys(zs).map(Number); },
   footDia: function(tier){ const f=model().C.find(function(q){ return q.t==='footing' && q.m.kind!=='sono' && q.tier===tier; }); return f ? f.m.dia : 16; }
 };
 
@@ -516,6 +530,7 @@ function renderTakeoff(){
       ['Deck area', c.area+' sq ft'],
       ['Joists', K.joists+' @ '+c.jsize+' / '+S.spacing+'" OC'+(c.needMid?' / 2 spans':'')],
       ['Girder'+(c.beamRows>1?'s':''), c.beamRows+' x (3)2x10 typ'],
+      ['Rim/band', K.rims+' x '+c.jsize+' PT'],
       ['Blocking', K.blocking ? K.blocking+' pcs @ mid-span' : 'not req’d at this span'],
       ['Posts 6x6 PT', K.posts + (K.landingPosts ? ' + '+K.landingPosts+' landing' : '')],
       ['Footings', K.footingsMain+' @ '+c.dia+'" dia'],
@@ -523,10 +538,10 @@ function renderTakeoff(){
       ['Decking', '~'+c.deckLF+' LF (5-1/2" bd)'],
       ['Fascia', '~'+K.fasciaLF+' LF'],
     ];
-    if (S.ledger) rows.splice(7, 0, ['Ledger', c.jsize+' PT / lags 16" OC'], ['Flashing', '~'+K.flashingLF+' LF at ledger']);
+    if (S.ledger) rows.splice(7, 0, ['Ledger', c.jsize+' PT / lag schedule in permit set'], ['Flashing', '~'+K.flashingLF+' LF at ledger']);
     rows.push(['Hardware', hwStr]);
     if (S.rail) rows.push(['Railing', '~'+c.railLF+' LF']);
-    if (S.stairs){ const sp2 = stairPlace(); rows.push(['Stairs', (sp2 ? sp2.sw : S.stairW)+"' wide / "+c.risers+' risers / '+K.stringers+' stringers'+(c.swb?' / switchback':'')]); }
+    if (S.stairs){ const sp2 = stairPlace(); rows.push(['Stairs', (sp2 ? sp2.sw : S.stairW)+"' wide / "+c.risers+' risers / '+K.stringersT1+' stringers'+(c.swb?' / switchback':'')]); }
     if (S.stairs && c.risers >= 4) rows.push(['Handrail', 'required (4+ risers) — included']);
     if (S.stairs) rows.push(['Stair footings', K.footingsSono+' @ 8" dia sonotube']);
     if (S.stairs) rows.push(['Stair landing', '36" min pad at grade']);
@@ -543,6 +558,7 @@ function renderTakeoff(){
       ['Upper joists', K.joists+' @ '+c.up.jsize+' / '+S.spacing+'" OC'+(c.up.needMid?' / 2 spans':'')],
       ['Lower joists', K.joistsLo+' @ '+c.lo.jsize+' / '+S.spacing+'" OC'+(c.lo.needMid?' / 2 spans':'')],
       ['Girders', K.beams+' x (3)2x10 typ'],
+      ['Rim/band', K.rims+' x 2x10 PT'],
       ['Blocking', K.blocking ? K.blocking+' pcs @ mid-span' : 'not req’d at this span'],
       ['Posts 6x6 PT', K.posts + (K.landingPosts ? ' + '+K.landingPosts+' landing' : '')],
       ['Footings', K.footStr],
@@ -550,11 +566,11 @@ function renderTakeoff(){
       ['Decking', '~'+c.deckLF+' LF (5-1/2" bd)'],
       ['Fascia', '~'+K.fasciaLF+' LF'],
     ];
-    if (S.ledger) rows.splice(8, 0, ['Ledger', c.up.jsize+' PT / lags 16" OC'], ['Flashing', '~'+K.flashingLF+' LF at ledger']);
+    if (S.ledger) rows.splice(8, 0, ['Ledger', c.up.jsize+' PT / lag schedule in permit set'], ['Flashing', '~'+K.flashingLF+' LF at ledger']);
     rows.push(['Hardware', hwStr]);
     if (S.rail) rows.push(['Railing', '~'+c.railLF+' LF']);
-    if (c.tierRisers > 0) rows.push(['Tier stair', c.tg.tierSw+"' wide / "+c.tierRisers+' risers']);
-    if (S.stairs && c.gsp) rows.push(['Grade stair', c.gsp.sw+"' wide / "+c.gradeRisers+' risers / '+K.stringers+' stringers'+(c.swb?' / switchback':'')]);
+    if (c.tierRisers > 0) rows.push(['Tier stair', c.tg.tierSw+"' wide / "+c.tierRisers+' risers / '+K.stringersT1+' stringers']);
+    if (S.stairs && c.gsp) rows.push(['Grade stair', c.gsp.sw+"' wide / "+c.gradeRisers+' risers / '+K.stringersT2+' stringers'+(c.swb?' / switchback':'')]);
     if (S.stairs && c.gradeRisers >= 4) rows.push(['Handrail', 'required (4+ risers) — included']);
     if (S.stairs) rows.push(['Stair footings', K.footingsSono+' @ 8" dia sonotube']);
     if (S.stairs) rows.push(['Stair landing', '36" min pad at grade']);
@@ -572,7 +588,7 @@ function renderTakeoff(){
     return '<div class="row"><span>'+r[0]+'</span><b class="'+(i<2?'hl':'')+'">'+r[1]+'</b></div>';
   }).join('') + '<p class="note">'
     + note
-    + 'Hardware counts are placement counts — exact connector models, fasteners and schedules are specified in your permit set. Framing #2 SYP pressure-treated. Decking includes 12% waste (more for diagonal or picture-frame layouts). Footings are drawn 36 in below grade — at or below frost depth for NJ townships; your permit set confirms your town’s exact requirement. Footings sized for 1,500 psf soil. Planning numbers for pricing and visualization. Final sizes are set in your permit drawings.</p>';
+    + 'Hardware counts are placement counts. Framing #2 SYP pressure-treated. Decking includes 12% waste (more for diagonal or picture-frame layouts). Footings 36 in below grade (at or below NJ frost depth), sized for 1,500 psf soil. Planning numbers for visualization and pricing — connector models, fastener schedules and final sizes are specified in your 18x24 permit set.</p>';
   document.getElementById('railNote').textContent = c.tier2
     ? (c.guardReq || c.guardLo ? 'Tier surfaces over 30 inches above grade: guards are required by code.' : 'Both tiers under 30 inches: guards optional in most towns.')
     : (c.guardReq
@@ -586,14 +602,14 @@ function takeoffText(){
   return !c.tier2
     ? ('SANTINO DECK STUDIO takeoff\n'
     + 'Deck '+S.w+' ft x '+S.d+' ft, '+S.h+' in above grade, '+(S.ledger?'attached (ledger)':'freestanding')+'\n'
-    + 'Joists '+c.joists+' @ '+c.jsize+' '+S.spacing+'in OC, Simpson hangers'+(c.needMid?' (2 spans, mid girder added)':'')+' / Girders '+c.beamRows+' x (3)2x10 typ'+(c.spliced?' (spliced over posts)':'')+'\n'
-    + 'Footings '+model().counts.footingsMain+' @ '+c.dia+'in dia, 36in below grade, blocking + hanger/hold-down placement per model'+(S.ledger?' / Ledger '+c.jsize+' PT, lags 16in OC':'')+'\n'
-    + 'Decking ~'+c.deckLF+' LF incl 12% waste'+(S.rail?' / Railing ~'+c.railLF+' LF':'')+(S.stairs?' / Stairs '+S.stairW+'ft wide, '+c.risers+' risers'+(c.swb?', switchback w/ mid landing':''):'')+'\n'
+    + 'Joists '+c.joists+' @ '+c.jsize+' '+S.spacing+'in OC, galv. joist hangers'+(c.needMid?' (2 spans, mid girder added)':'')+' / Girders '+c.beamRows+' x (3)2x10 typ'+(c.spliced?' (spliced over posts)':'')+'\n'
+    + 'Footings '+model().counts.footingsMain+' @ '+c.dia+'in dia, 36in below grade, blocking + hanger/hold-down placement per model'+(S.ledger?' / Ledger '+c.jsize+' PT, lag schedule in permit set':'')+'\n'
+    + 'Decking ~'+c.deckLF+' LF incl 12% waste'+(S.rail?' / Railing ~'+c.railLF+' LF':'')+(S.stairs?' / Stairs '+((stairPlace()||{}).sw||S.stairW)+'ft wide, '+c.risers+' risers'+(c.swb?', switchback w/ mid landing':''):'')+'\n'
     + 'Quote: https://santinodrafting.com/#quote')
     : ('SANTINO DECK STUDIO takeoff (two tier)\n'
     + 'Upper '+S.w+' ft x '+S.d+' ft at '+S.h+' in, '+(S.ledger?'attached (ledger)':'freestanding')+' / Lower '+S.w2+' ft x '+S.d2+' ft at '+c.h2e+' in, on shared posts\n'
-    + 'Joists upper '+c.up.joists+' @ '+c.up.jsize+', lower '+c.lo.joists+' @ '+c.lo.jsize+', '+S.spacing+'in OC, Simpson hangers / Girders '+c.girderMembers+' x (3)2x10 typ\n'
-    + 'Footings '+footStr(c).replace(/"/g,'in')+', 36in below grade, shared row upsized'+(S.ledger?' / Ledger '+c.up.jsize+' PT, lags 16in OC':'')+'\n'
+    + 'Joists upper '+c.up.joists+' @ '+c.up.jsize+', lower '+c.lo.joists+' @ '+c.lo.jsize+', '+S.spacing+'in OC, galv. joist hangers / Girders '+c.girderMembers+' x (3)2x10 typ\n'
+    + 'Footings '+model().counts.footStr.replace(/"/g,'in')+', 36in below grade, shared row upsized'+(S.ledger?' / Ledger '+c.up.jsize+' PT, lag schedule in permit set':'')+'\n'
     + 'Decking ~'+c.deckLF+' LF'+(S.rail?' / Railing ~'+c.railLF+' LF':'')
     + (c.tierRisers?' / Tier stair '+c.tg.tierSw+'ft wide, '+c.tierRisers+' risers':'')
     + (S.stairs && c.gsp?' / Grade stair '+c.gsp.sw+'ft wide, '+c.gradeRisers+' risers'+(c.swb?', switchback w/ mid landing':''):'')+'\n'
@@ -744,8 +760,10 @@ function legendCounts(){
   // count what reads naturally per part (pieces), collapse caps/risers into their parts
   const adj = Object.assign({}, by);
   if (adj.railpost) adj.railpost = md.counts.railposts;
-  if (adj.tread) adj.tread = md.counts.treads;
+  if (adj.tread) adj.tread = md.counts.treads + md.counts.risersN;
   if (adj.hw) adj.hw = md.counts.hangers + md.counts.holddowns + md.counts.postbases;
+  if (adj.stringer) adj.stringer = md.counts.stringers;
+  if (adj.joist) adj.joist = md.counts.joists + md.counts.joistsLo;
   return adj;
 }
 function legendSync(){
@@ -1149,14 +1167,14 @@ function renderPlan(){
   (function(){
     const topDimY = (planSp && planSp.edge==='front') ? (y0 - (S.ledger ? 46 : 32)) : null;
     if (topDimY !== null){
-      s += '<text x="'+(x0+dw/2)+'" y="'+(topDimY+11)+'" text-anchor="middle" font-family="IBM Plex Mono" font-size="7.5" fill="#0C0E11" opacity="0.85">PROPOSED DECK</text>';
+      s += '<text x="'+(x0+dw/2)+'" y="'+(topDimY+11)+'" text-anchor="middle" font-family="IBM Plex Mono" font-size="8.5" fill="#0C0E11" opacity="0.85">PROPOSED DECK</text>';
     }
     if (MODE==='decking'){
       const bx = x0+dw+30, by2 = y0+dd/2;
       s += '<circle cx="'+bx+'" cy="'+by2+'" r="11" fill="#F2EFE7" stroke="#0C0E11" stroke-width="1.4"/>';
       s += '<line x1="'+(bx-11)+'" y1="'+by2+'" x2="'+(bx+11)+'" y2="'+by2+'" stroke="#0C0E11" stroke-width="1"/>';
       s += '<text x="'+bx+'" y="'+(by2-2.5)+'" text-anchor="middle" font-family="IBM Plex Mono" font-weight="600" font-size="8.5" fill="#0C0E11">1</text>';
-      s += '<text x="'+bx+'" y="'+(by2+8.5)+'" text-anchor="middle" font-family="IBM Plex Mono" font-size="6.5" fill="#0C0E11">A-2</text>';
+      s += '<text x="'+bx+'" y="'+(by2+8.5)+'" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" fill="#0C0E11">A-2</text>';
       s += '<path d="M'+(bx-11)+' '+by2+' l-8 -5 l0 10 z" fill="#0C0E11"/>';
     }
   })();
@@ -1535,6 +1553,7 @@ function renderElevation(kind){
     ln(xa, topZ+0.12*SV, xb, topZ+0.12*SV, 0.7, null, 0.7);
   };
   const postAt = function(cx, yTopP){
+    if (yTopP >= GY - 2){ footing(cx, 0.9*SV); return; }   // grade-bearing: no visible post
     rc(cx-0.23*SV, yTopP, 0.46*SV, GY-yTopP, 1.6);
     footing(cx, 0.9*SV);
   };
@@ -1553,7 +1572,7 @@ function renderElevation(kind){
       const xA = Math.min(faceX2 - dirR*nose, faceX2 + dirR*runp);
       rc(xA, ty - tth, runp + nose, tth, 1.1, null, '#F2EFE7');
     }
-    if (withRail && S.rail){
+    if (withRail){
       // per code diagram: rail runs newel-to-newel parallel to the pitch; balusters land on the treads
       const hp2=Math.max(2.2,0.17*SV);
       const capH=Math.max(2.5,0.16*SV), subH=Math.max(2,0.11*SV);
@@ -1630,7 +1649,8 @@ function renderElevation(kind){
   let dbgStair = null;
   // head-on stair: risers stacked between topY and botY across the opening — used when the
   // flight descends toward/away from the viewer (front stairs in FRONT view, end stairs in SIDE view)
-  const frontalStair = function(sxL, swPx, topY, botY, risers, sono){
+  const frontalStair = function(sxL, swPx, topY, botY, risers, sono, hrOn){
+    const RAILON = (hrOn !== undefined) ? hrOn : (S.rail || risers >= 4);
     const sxR = sxL + swPx;
     if (risers > 12 && botY === GY){
       // switchback head-on: two riser columns side by side, landing band between levels
@@ -1653,7 +1673,7 @@ function renderElevation(kind){
       ln(sx2R, yL-0.28*SV, sx2R, botY, 1.6);
       for (let r2=1; r2<n2; r2++){ const yy = yL + r2*((botY-yL)/n2); ln(sxR, yy, sx2R, yy, 1); }
       ln(sxL, botY, sx2R, botY, 1, null, 0.001);
-      if (S.rail){
+      if (RAILON){
         rc(sxL-0.14*SV, topY-3.0*SV, 0.28*SV, (botY-8)-(topY-3.0*SV), 1.3, null, '#F2EFE7');
         rc(sx2R-0.14*SV, yL-3.0*SV, 0.28*SV, (botY-8)-(yL-3.0*SV), 1.3, null, '#F2EFE7');
       }
@@ -1670,7 +1690,7 @@ function renderElevation(kind){
     ln(sxL, topY, sxR, topY, 1.6);
     ln(sxL, topY, sxL, botY, 1.6); ln(sxR, topY, sxR, botY, 1.6);
     for (let r2=1; r2<risers; r2++){ const yy = topY + r2*((botY-topY)/risers); ln(sxL, yy, sxR, yy, 1); }
-    if (S.rail){
+    if (RAILON){
       [sxL, sxR].forEach(function(gx4){
         rc(gx4-0.14*SV, topY-3.0*SV, 0.28*SV, (botY-8)-(topY-3.0*SV), 1.3, null, '#F2EFE7');
         rc(gx4-0.185*SV, topY-3.0*SV-3.2, 0.37*SV, 3.2, 1.2, null, '#F2EFE7');
@@ -1696,8 +1716,8 @@ function renderElevation(kind){
     deckBand(x0, x0+dw, deckTop);
     const yG=deckTop+0.95*SV;
     // girder: visible solid (3)2x10 band across the width; posts bear on its underside
-    rc(x0+1.0*SV, yG, dw-2.0*SV, 0.8*SV, 1.6);
-    const per=c.perRow, run=Math.max(0.5,w-3);
+    rc(x0+0.6*SV, yG, dw-1.2*SV, Math.max(2, Math.min(0.8*SV, GY-yG-1)), 1.6);
+    const per=(c.tier2? c.sharedPer : c.perRow), run=Math.max(0.5,w-3);
     let px1st=0;
     for (let i2=0;i2<per;i2++){
       const px2=x0+(1.5+(per===1?0:i2*(run/(per-1))))*SV;
@@ -1734,7 +1754,7 @@ function renderElevation(kind){
       loTop=GY-h2ft*SV;
       deckBand(lx0, lx0+lw, loTop);
       const yG2=loTop+0.95*SV, run2=Math.max(0.5,w2-3), per2=c.lo.perRow;
-      rc(lx0+1.0*SV, yG2, Math.max(2*SV, lw-2.0*SV), 0.8*SV, 1.6);
+      rc(lx0+0.6*SV, yG2, Math.max(2*SV, lw-1.2*SV), Math.max(2, Math.min(0.8*SV, GY-yG2-1)), 1.6);
       for (let i2=0;i2<per2;i2++){ postAt(lx0+(1.5+(per2===1?0:i2*(run2/(per2-1))))*SV, yG2+0.8*SV); }
       let gA=null, gB=null;
       if (S.stairs && c.gsp && c.gsp.edge==='front'){
@@ -1765,7 +1785,7 @@ function renderElevation(kind){
     vdim(RX, deckTop, GY, S.h+'"');
     vdim(RX, GY, GY+30, '36"');
     if (c.tier2 && loTop!==null) vdim(RX+26, loTop, GY, c.h2e+'"');
-    hdim(px1st-0.45*SV, px1st+0.45*SV, BY+14, Math.round(c.dia)+'"', null);
+    hdim(px1st-0.45*SV, px1st+0.45*SV, BY+14, Math.round(c.tier2? c.sharedDia : c.dia)+'"', null);
   } else {
   // ================= SIDE =================
     const dTot = S.tier2 ? (S.d+S.d2) : S.d;
@@ -1798,12 +1818,19 @@ function renderElevation(kind){
     ln(faceX, deckTop, faceX+dpx, deckTop, 2.5);
     ln(faceX, deckTop+2.5, faceX+dpx, deckTop+2.5, 0.8, null, 0.7);
     rc(faceX, deckTop+2, dpx, 0.83*SV, 1.4);
-    const yJb=deckTop+2+0.83*SV;
+    const yJb=Math.min(deckTop+2+0.83*SV, GY-Math.max(3,0.85*SV)-1);
     const gx=faceX+(S.d-c.cant)*SV;
     rc(gx-0.24*SV, yJb, 0.48*SV, 0.85*SV, 1.8);
     ln(gx-0.08*SV, yJb, gx-0.08*SV, yJb+0.85*SV, 0.7, null, 0.7);
     ln(gx+0.08*SV, yJb, gx+0.08*SV, yJb+0.85*SV, 0.7, null, 0.7);
     postAt(gx, yJb+0.85*SV);
+    if (c.needMid && !c.tier2){
+      const gxm = faceX + (S.ledger ? (S.d/2 - c.cant/2) : S.d/2)*SV;
+      rc(gxm-0.24*SV, yJb, 0.48*SV, 0.85*SV, 1.8);
+      ln(gxm-0.08*SV, yJb, gxm-0.08*SV, yJb+0.85*SV, 0.7, null, 0.7);
+      ln(gxm+0.08*SV, yJb, gxm+0.08*SV, yJb+0.85*SV, 0.7, null, 0.7);
+      postAt(gxm, yJb+0.85*SV);
+    }
     if (!S.ledger){ const gx0=faceX+c.cant*SV; rc(gx0-0.24*SV,yJb,0.48*SV,0.85*SV,1.8); postAt(gx0, yJb+0.85*SV); }
     let cutSA=null, cutSB=null;
     if (!S.tier2 && S.stairs && spS && spS.edge!=='front'){
@@ -1896,7 +1923,19 @@ function syncField(id, val){
   const el = document.getElementById(id);
   if (el && document.activeElement !== el) el.value = val;
 }
+function sanitizeS(){
+  const num = function(v, lo, hi, dflt){ v = +v; return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : dflt; };
+  S.w = num(S.w, 4, 40, 16); S.d = num(S.d, 3, 24, 12); S.h = num(S.h, 8, 120, 36);
+  S.w2 = num(S.w2, 3, 30, 10); S.d2 = num(S.d2, 3, 20, 10); S.h2 = num(S.h2, 8, 112, 24);
+  if (S.spacing !== 12) S.spacing = 16;
+  if ([3,4,5].indexOf(+S.stairW) < 0) S.stairW = 4; else S.stairW = +S.stairW;
+  if (['fl','fc','fr','el','er'].indexOf(S.stairPos) < 0) S.stairPos = 'fr';
+  // a lower tier wider than the upper would cantilever the shared girder and open unguarded
+  // edges — clamp to the upper width (mirrors the h2 clamp)
+  if (S.tier2 && S.w2 > S.w) S.w2 = S.w;
+}
 function refresh(){
+  sanitizeS();
   modelDirty();
   // code: guards are not optional over 30" — the tool includes them automatically
   const guardMust = S.h > 30 || (S.tier2 && h2eff() > 30);
@@ -2006,7 +2045,7 @@ document.querySelectorAll('.tabs button').forEach(function(b){
     var is3d = S.view==='3d';
     document.getElementById('three-wrap').style.display = is3d ? 'block' : 'none';
     document.getElementById('plan-wrap').style.display = is3d ? 'none' : 'block';
-    if (is3d){ sizeStage(); } else { renderView(); }
+    if (is3d){ sizeStage(); const lg2=document.getElementById('ds-legend'); if (lg2) lg2.style.display=''; } else { renderView(); }
     viewHint();
   });
 });
