@@ -301,11 +301,19 @@ function resolve(){
     const ang = Math.atan2(drop, runT) * dir;
     for (let s2=0;s2<nStr;s2++){
       const sxo = cx - sw/2 + 0.08 + s2*((sw-0.16)/(nStr-1));
-      // notched (closed) stringer: held low so the sawtooth never shows above the treads;
-      // with solid risers the cut line is fully concealed
-      T.push({t:'stringer', sh:'box', lx:sxo, ly:yTop - drop/2 - 0.74, lz:z0 + dir*(runT/2 + 0.22),
-        dx:0.13, dy:0.5, dz:Math.max(1, slope - 0.55), rotX:ang, tier:tier, m:{dir:dir}});
+      // notched stringer built honestly: a low sloped carriage that can never break the tread
+      // plane, plus sawtooth step blocks carrying each tread down to the carriage
+      T.push({t:'stringer', sh:'box', lx:sxo, ly:yTop - drop/2 - 0.74, lz:z0 + dir*(runT/2 + 0.15),
+        dx:0.13, dy:0.5, dz:Math.max(1, slope - 0.3), rotX:ang, tier:tier, m:{dir:dir}});
+      for (let k=-1; k<n-1; k++){
+        const tTop = yTop - rise*(k+1);
+        T.push({t:'stringer', sh:'box', lx:sxo, ly:tTop - 0.12 - rise*0.45, lz:z0 + dir*((k+1)+0.5)*runL - dir*runL*0.5,
+          dx:0.13, dy:rise*0.9, dz:runL*0.78, tier:tier, m:{step:k}});
+      }
     }
+    // treated kicker at the flight base ties the stringer feet to the sonotube pads
+    T.push({t:'stringer', sh:'box', lx:cx, ly:0.3, lz:z0 + dir*(runT - 0.35),
+      dx:sw, dy:0.14, dz:0.4, tier:tier, m:{kicker:true}});
     // closed flight: risers span rise-to-rise (no see-through), treads sit on top with a nosing
     for (let st=0; st<n; st++){
       T.push({t:'tread', sh:'box', lx:cx, ly:yTop - rise*st - rise/2, lz:z0 + dir*(st*runL) + dir*0.04,
@@ -343,7 +351,7 @@ function resolve(){
     if (!swb){
       flight(tier, T, risers, rise, sw, hft, 0, 0, 1, ron);
       [-(sw/2-0.45), sw/2-0.45].forEach(function(fx){
-        T.push({t:'footing', sh:'cyl', lx:fx, ly:0.11, lz:risers*runL - 0.4, r:0.34, len:0.22, tier:tier, m:{dia:8, kind:'sono'}});
+        T.push({t:'footing', sh:'cyl', lx:fx, ly:0.11, lz:risers*runL - 0.35, r:0.34, len:0.22, tier:tier, m:{dia:8, kind:'sono'}});
       });
       if (ron) [-sw/2, sw/2].forEach(function(hx){
         T.push({t:'railpost', sh:'box', lx:hx, ly:1.47, lz:risers*runL - 0.1, dx:0.2, dy:2.95, dz:0.2, tier:tier, m:{}});
@@ -464,7 +472,7 @@ function resolve(){
     joistsLo: n('joist', function(q){ return !q.m.rim && q.tier===2; }),
     blocking: n('blocking'),
     beams: n('beam'),
-    stringers: n('stringer'),
+    stringers: n('stringer', function(q){ return q.m.step===undefined && !q.m.kicker; }),
     hangers: n('hw', function(q){ return q.m.kind==='hanger'; }),
     holddowns: n('hw', function(q){ return q.m.kind==='holddown'; }),
     postbases: n('hw', function(q){ return q.m.kind==='postbase'; }),
