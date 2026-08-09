@@ -307,7 +307,7 @@ function resolve(){
         dx:0.13, dy:0.5, dz:Math.max(1, slope - 0.3), rotX:ang, tier:tier, m:{dir:dir}});
       for (let k=-1; k<n-1; k++){
         const tTop = yTop - rise*(k+1);
-        T.push({t:'stringer', sh:'box', lx:sxo, ly:tTop - 0.12 - rise*0.45, lz:z0 + dir*((k+1)+0.5)*runL - dir*runL*0.5,
+        T.push({t:'stringer', sh:'box', lx:sxo, ly:tTop - 0.12 - rise*0.45, lz:z0 + dir*(k+0.5)*runL,
           dx:0.13, dy:rise*0.9, dz:runL*0.78, tier:tier, m:{step:k}});
       }
     }
@@ -1436,7 +1436,6 @@ function renderElevation(kind){
   const deckBand = function(xa,xb,topZ){
     rc(xa, topZ, xb-xa, 0.95*SV, 2, null, '#F2EFE7');
     ln(xa, topZ+0.12*SV, xb, topZ+0.12*SV, 0.7, null, 0.7);
-    ln(xa, topZ+0.52*SV, xb, topZ+0.52*SV, 0.7, null, 0.5);
   };
   const postAt = function(cx, yTopP){
     rc(cx-0.23*SV, yTopP, 0.46*SV, GY-yTopP, 1.6);
