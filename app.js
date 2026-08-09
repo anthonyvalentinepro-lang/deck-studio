@@ -1550,13 +1550,18 @@ function renderElevation(kind){
       poly(nTx, g1y, nBx, g2y, capH);
       poly(nTx, g1y+capH, nBx, g2y+capH, subH);
       // plumb balusters from the sub-rail down onto the treads
-      const nosY = function(bx){ const t3=(bx-x0s)/(dirR*n*runp); return (topY+rise) + (botY-(topY+rise))*Math.max(0,Math.min(1,t3)); };
+      // each baluster foot lands on ITS tread surface (stepping down bay by bay)
+      const treadTopAt = function(bx){
+        const u = (bx - x0s)/(dirR*runp);
+        const k = Math.max(0, Math.min(n-1, Math.floor(u)));
+        return Math.min(botY, topY + rise*(k+1));
+      };
       const bw2=Math.max(1.6,0.12*SV), pitch2=Math.max(bw2*2.1,0.34*SV);
       const span2=Math.abs(nBx-nTx), nB3=Math.floor(span2/pitch2);
       for (let b3=1;b3<nB3;b3++){
         const bt=b3/nB3, bx2=nTx+(nBx-nTx)*bt;
         const yTopB=g1y+(g2y-g1y)*bt+capH+subH;
-        const yBotB=Math.min(nosY(bx2)-0.03*SV, botY-1);
+        const yBotB=treadTopAt(bx2)-0.5;
         if (yBotB - yTopB > 2) rc(bx2-bw2/2, yTopB, bw2, yBotB-yTopB, 0.9, null, '#F2EFE7');
       }
       // newels: top one rides the deck corner post; bottom one is full height off the grade
