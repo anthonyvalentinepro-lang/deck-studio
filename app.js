@@ -312,8 +312,9 @@ function resolve(){
       const sxo = cx - sw/2 + 0.08 + s2*((sw-0.16)/(nStr-1));
       // notched stringer built honestly: a low sloped carriage that can never break the tread
       // plane, plus sawtooth step blocks carrying each tread down to the carriage
-      T.push({t:'stringer', sh:'box', lx:sxo, ly:yTop - drop/2 - (rise + 0.4), lz:z0 + dir*(runT/2 + 0.15),
-        dx:0.13, dy:0.5, dz:Math.max(1, slope - 0.3), rotX:ang, tier:tier, m:{dir:dir, rise:rise, n:n}});
+      const runC = Math.max(runL, (n-1)*runL), slopeC = Math.sqrt(runC*runC + drop*drop), angC = Math.atan2(drop, runC) * dir;
+      T.push({t:'stringer', sh:'box', lx:sxo, ly:yTop - drop/2 - (rise + 0.4), lz:z0 + dir*(runC/2),
+        dx:0.13, dy:0.5, dz:Math.max(1, slopeC), rotX:angC, tier:tier, m:{dir:dir, rise:rise, n:n}});
       for (let k=-1; k<n-1; k++){
         const tTop = yTop - rise*(k+1);
         T.push({t:'stringer', sh:'box', lx:sxo, ly:tTop - 0.12 - rise*0.45, lz:z0 + dir*(k+0.5)*runL,
@@ -359,13 +360,14 @@ function resolve(){
     T.push({t:'stairhdr', sh:'box', lx:0, ly:hft-0.36, lz:-0.24, dx:sw+0.5, dy:0.62, dz:0.13, tier:tier, m:{plies:2}});
     if (!swb){
       flight(tier, T, risers, rise, sw, hft, 0, 0, 1, ron);
-      T.push({t:'stringer', sh:'box', lx:0, ly:0.3, lz:risers*runL - 0.35, dx:sw, dy:0.14, dz:0.4, tier:tier, m:{kicker:true}});
+      const footZ = (risers-1)*runL;   // directly under the bottom step / stringer foot
+      T.push({t:'stringer', sh:'box', lx:0, ly:0.14, lz:footZ, dx:sw, dy:0.16, dz:0.5, tier:tier, m:{kicker:true}});
       [-(sw/2-0.45), sw/2-0.45].forEach(function(fx){
         const sd = (risers > 10 || sw >= 5) ? 10 : 8;
-        T.push({t:'footing', sh:'cyl', lx:fx, ly:0.11, lz:risers*runL - 0.35, r:sd/24, len:0.22, tier:tier, m:{dia:sd, kind:'sono'}});
+        T.push({t:'footing', sh:'cyl', lx:fx, ly:0.11, lz:footZ, r:sd/24, len:0.22, tier:tier, m:{dia:sd, kind:'sono'}});
       });
       if (ron) [-sw/2, sw/2].forEach(function(hx){
-        T.push({t:'railpost', sh:'box', lx:hx, ly:1.47, lz:risers*runL - 0.1, dx:0.2, dy:2.95, dz:0.2, tier:tier, m:{}});
+        T.push({t:'railpost', sh:'box', lx:hx, ly:1.47, lz:footZ, dx:0.2, dy:2.95, dz:0.2, tier:tier, m:{}});
       });
     } else {
       const n1 = Math.ceil(risers/2), n2 = risers - n1;
@@ -408,10 +410,11 @@ function resolve(){
       }
       // return flight beside the first, descending back toward the deck face
       flight(tier, T, n2, rise, sw, yLand, ex*sw, len1, -1, ron);
-      T.push({t:'stringer', sh:'box', lx:ex*sw, ly:0.3, lz:len1 - n2*runL + 0.35, dx:sw, dy:0.14, dz:0.4, tier:tier, m:{kicker:true}});
+      const footZ2 = len1 - (n2-1)*runL;   // under the return flight's bottom step
+      T.push({t:'stringer', sh:'box', lx:ex*sw, ly:0.14, lz:footZ2, dx:sw, dy:0.16, dz:0.5, tier:tier, m:{kicker:true}});
       [ex*sw - (sw/2-0.45), ex*sw + (sw/2-0.45)].forEach(function(fx){
         const sd2 = (n2 > 10 || sw >= 5) ? 10 : 8;
-        T.push({t:'footing', sh:'cyl', lx:fx, ly:0.11, lz:len1 - n2*runL + 0.4, r:sd2/24, len:0.22, tier:tier, m:{dia:sd2, kind:'sono'}});
+        T.push({t:'footing', sh:'cyl', lx:fx, ly:0.11, lz:footZ2, r:sd2/24, len:0.22, tier:tier, m:{dia:sd2, kind:'sono'}});
       });
       if (ron) [ex*sw - sw/2, ex*sw + sw/2].forEach(function(hx){
         T.push({t:'railpost', sh:'box', lx:hx, ly:1.47, lz:len1 - n2*runL + 0.1, dx:0.2, dy:2.95, dz:0.2, tier:tier, m:{}});
@@ -1067,28 +1070,32 @@ function renderPlan(){
     const ro = 5;
     // railing per drafting standard: double rail line CENTERED on hollow post squares <= 6'-0" OC
     const psq2 = Math.max(4, 0.46*sc), rw = Math.max(2.2, 0.22*sc);
-    const _postCells = {};   // dedupe so shared corners get exactly ONE post
-    const placePost = function(cx, cy){
-      const key = Math.round(cx/2)+'_'+Math.round(cy/2);
-      if (_postCells[key]) return; _postCells[key] = 1;
-      s += '<rect x="'+(cx-psq2/2)+'" y="'+(cy-psq2/2)+'" width="'+psq2+'" height="'+psq2+'" fill="#F2EFE7" stroke="#0C0E11" stroke-width="1.2"/>';
-    };
-    const rseg = function(x1,y1,x2,y2){
+    const _railSegs = [], _postPts = [], _postCells = {};
+    const rseg = function(x1,y1,x2,y2){   // pass 1: just collect
       const vert = Math.abs(x2-x1) < 0.5;
       const len = vert ? (y2-y1) : (x2-x1); if (len < 3) return;
-      if (vert){
-        // rail pair straddles the post centreline x1 (rail centered on post)
-        s += '<line x1="'+(x1-rw/2)+'" y1="'+y1+'" x2="'+(x1-rw/2)+'" y2="'+y2+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
-        s += '<line x1="'+(x1+rw/2)+'" y1="'+y1+'" x2="'+(x1+rw/2)+'" y2="'+y2+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
-      } else {
-        s += '<line x1="'+x1+'" y1="'+(y1-rw/2)+'" x2="'+x2+'" y2="'+(y1-rw/2)+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
-        s += '<line x1="'+x1+'" y1="'+(y1+rw/2)+'" x2="'+x2+'" y2="'+(y1+rw/2)+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
-      }
+      _railSegs.push({vert:vert, x1:x1, y1:y1, x2:x2, y2:y2, len:len});
       const nP2 = Math.max(2, Math.ceil(Math.abs(len)/(6*sc))+1);
-      for (let p3=0;p3<nP2;p3++){
-        const t4 = p3/(nP2-1);
-        placePost(vert ? x1 : (x1 + t4*len), vert ? (y1 + t4*len) : y1);
-      }
+      for (let p3=0;p3<nP2;p3++){ const t4=p3/(nP2-1); _postPts.push([vert?x1:(x1+t4*len), vert?(y1+t4*len):y1]); }
+    };
+    const finalizeRails = function(){
+      // mask (kills decking showing through) then the two rail lines centered on the post line
+      _railSegs.forEach(function(g){
+        if (g.vert){
+          s += '<rect x="'+(g.x1-rw/2-1)+'" y="'+g.y1+'" width="'+(rw+2)+'" height="'+(g.y2-g.y1)+'" fill="#F2EFE7"/>';
+          s += '<line x1="'+(g.x1-rw/2)+'" y1="'+g.y1+'" x2="'+(g.x1-rw/2)+'" y2="'+g.y2+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
+          s += '<line x1="'+(g.x1+rw/2)+'" y1="'+g.y1+'" x2="'+(g.x1+rw/2)+'" y2="'+g.y2+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
+        } else {
+          s += '<rect x="'+g.x1+'" y="'+(g.y1-rw/2-1)+'" width="'+(g.x2-g.x1)+'" height="'+(rw+2)+'" fill="#F2EFE7"/>';
+          s += '<line x1="'+g.x1+'" y1="'+(g.y1-rw/2)+'" x2="'+g.x2+'" y2="'+(g.y1-rw/2)+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
+          s += '<line x1="'+g.x1+'" y1="'+(g.y1+rw/2)+'" x2="'+g.x2+'" y2="'+(g.y1+rw/2)+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
+        }
+      });
+      _postPts.forEach(function(p){
+        const key = Math.round(p[0]/2)+'_'+Math.round(p[1]/2);
+        if (_postCells[key]) return; _postCells[key] = 1;
+        s += '<rect x="'+(p[0]-psq2/2)+'" y="'+(p[1]-psq2/2)+'" width="'+psq2+'" height="'+psq2+'" fill="#F2EFE7" stroke="#0C0E11" stroke-width="1.2"/>';
+      });
     };
     const cutE = planSp ? planSp.edge : null;
     const cu0 = planSp ? ((cutE==='front') ? x0+(planSp.c-planSp.sw/2+S.w/2)*sc : y0+(planSp.c-planSp.sw/2+S.d/2)*sc) : 0;
@@ -1108,6 +1115,7 @@ function renderPlan(){
     };
     edgeR('left'); edgeR('right'); edgeR('front');
     if (!S.ledger) edgeR('back');
+    finalizeRails();
   }
   // dimensions
   function dim(x1,y1,x2,y2,label,off,vert){
@@ -1390,27 +1398,31 @@ function renderPlanTier2(c, W, H, m, availW, availH){
   if (MODE==='decking' && S.rail){
     const ro = 5;
     const psq3 = Math.max(4, 0.46*sc), rw3 = Math.max(2.2, 0.22*sc);
-    const _pc2 = {};
-    const placePost3 = function(cx, cy){
-      const key = Math.round(cx/2)+'_'+Math.round(cy/2);
-      if (_pc2[key]) return; _pc2[key] = 1;
-      s += '<rect x="'+(cx-psq3/2)+'" y="'+(cy-psq3/2)+'" width="'+psq3+'" height="'+psq3+'" fill="#F2EFE7" stroke="#0C0E11" stroke-width="1.2"/>';
-    };
+    const _rs2 = [], _pp2 = [], _pc2 = {};
     const rseg = function(x1,y1,x2,y2){
       const vert = Math.abs(x2-x1) < 0.5;
       const len = vert ? (y2-y1) : (x2-x1); if (len < 3) return;
-      if (vert){
-        s += '<line x1="'+(x1-rw3/2)+'" y1="'+y1+'" x2="'+(x1-rw3/2)+'" y2="'+y2+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
-        s += '<line x1="'+(x1+rw3/2)+'" y1="'+y1+'" x2="'+(x1+rw3/2)+'" y2="'+y2+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
-      } else {
-        s += '<line x1="'+x1+'" y1="'+(y1-rw3/2)+'" x2="'+x2+'" y2="'+(y1-rw3/2)+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
-        s += '<line x1="'+x1+'" y1="'+(y1+rw3/2)+'" x2="'+x2+'" y2="'+(y1+rw3/2)+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
-      }
+      _rs2.push({vert:vert,x1:x1,y1:y1,x2:x2,y2:y2});
       const nP3 = Math.max(2, Math.ceil(Math.abs(len)/(6*sc))+1);
-      for (let p4=0;p4<nP3;p4++){
-        const t5 = p4/(nP3-1);
-        placePost3(vert ? x1 : (x1 + t5*len), vert ? (y1 + t5*len) : y1);
-      }
+      for (let p4=0;p4<nP3;p4++){ const t5=p4/(nP3-1); _pp2.push([vert?x1:(x1+t5*len), vert?(y1+t5*len):y1]); }
+    };
+    const finalizeRails = function(){
+      _rs2.forEach(function(g){
+        if (g.vert){
+          s += '<rect x="'+(g.x1-rw3/2-1)+'" y="'+g.y1+'" width="'+(rw3+2)+'" height="'+(g.y2-g.y1)+'" fill="#F2EFE7"/>';
+          s += '<line x1="'+(g.x1-rw3/2)+'" y1="'+g.y1+'" x2="'+(g.x1-rw3/2)+'" y2="'+g.y2+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
+          s += '<line x1="'+(g.x1+rw3/2)+'" y1="'+g.y1+'" x2="'+(g.x1+rw3/2)+'" y2="'+g.y2+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
+        } else {
+          s += '<rect x="'+g.x1+'" y="'+(g.y1-rw3/2-1)+'" width="'+(g.x2-g.x1)+'" height="'+(rw3+2)+'" fill="#F2EFE7"/>';
+          s += '<line x1="'+g.x1+'" y1="'+(g.y1-rw3/2)+'" x2="'+g.x2+'" y2="'+(g.y1-rw3/2)+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
+          s += '<line x1="'+g.x1+'" y1="'+(g.y1+rw3/2)+'" x2="'+g.x2+'" y2="'+(g.y1+rw3/2)+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
+        }
+      });
+      _pp2.forEach(function(p){
+        const key = Math.round(p[0]/2)+'_'+Math.round(p[1]/2);
+        if (_pc2[key]) return; _pc2[key] = 1;
+        s += '<rect x="'+(p[0]-psq3/2)+'" y="'+(p[1]-psq3/2)+'" width="'+psq3+'" height="'+psq3+'" fill="#F2EFE7" stroke="#0C0E11" stroke-width="1.2"/>';
+      });
     };
     // upper rect
     const ux0=X(-w/2), ux1=X(w/2), uy0=Y(-d/2), uy1=Y(d/2);
@@ -1429,6 +1441,7 @@ function renderPlanTier2(c, W, H, m, availW, availH){
       if (gc0 > lx0+ro+4) rseg(lx0+ro, ly1-ro, Math.min(gc0, lx1-ro), ly1-ro);
       if (gc1 < lx1-ro-4) rseg(Math.max(gc1, lx0+ro), ly1-ro, lx1-ro, ly1-ro);
     } else { rseg(lx0+ro, ly1-ro, lx1-ro, ly1-ro); }
+    finalizeRails();
   }
   // dimensions
   function dim(x1,y1,x2,y2,label,off,vert){
@@ -1616,7 +1629,7 @@ function renderElevation(kind){
       dbgStair = 'profile';
       const ex2 = profileFlight(x0s, topZ, GY, risers, dirR, withRail);
       const runp0=(11/12)*SV;
-      footing(x0s + dirR*Math.max(1,(risers-1.5))*runp0, 0.7*SV);   // under the stringer foot / bottom newel
+      footing(x0s + dirR*Math.max(1,(risers-1))*runp0, 0.7*SV);   // under the bottom step / stringer foot
       return ex2;
     }
     // switchback: flight 1 out to a mid landing, return flight comes back UNDER flight 1
