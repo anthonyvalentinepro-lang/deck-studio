@@ -1540,8 +1540,9 @@ function renderElevation(kind){
       const hp2=Math.max(2.2,0.17*SV);
       const capH=Math.max(2.5,0.16*SV), subH=Math.max(2,0.11*SV);
       const nTx = x0s;                                // rails die into the deck guard's corner post
-      const nBx = ex2 - dirR*0.14*SV;                 // bottom newel at the flight base
-      const g1y = topY - 3.0*SV, g2y = botY - 3.0*SV;
+      const nBx = x0s + dirR*Math.max(1,(n-1.5))*runp; // bottom newel stands ON the bottom tread
+      const newelBase = Math.min(botY, topY + rise*(n-1)); // that tread's surface
+      const g1y = topY - 3.0*SV, g2y = topY + Math.max(0.5,(n-1.5))*rise - 3.0*SV;
       const poly=function(xa,ya,xb,yb,h){
         s += '<path d="M'+xa+' '+ya+' L'+xb+' '+yb+' L'+xb+' '+(yb+h)+' L'+xa+' '+(ya+h)+' Z" fill="#F2EFE7" stroke="#0C0E11" stroke-width="1.1"/>';
         upd(xa,ya); upd(xb,yb+h);
@@ -1562,7 +1563,7 @@ function renderElevation(kind){
         rc(bx2-bw2/2, yTopB, bw2, yBotB-yTopB, 0.9, null, '#F2EFE7');
       }
       // one shared corner post at the top (the deck guard's); the stair adds only its bottom newel
-      [[nBx, g2y, botY]].forEach(function(pp){
+      [[nBx, g2y, newelBase]].forEach(function(pp){
         rc(pp[0]-hp2, pp[1]-3, 2*hp2, pp[2]-(pp[1]-3), 1.3, null, '#F2EFE7');
         rc(pp[0]-hp2-0.045*SV, pp[1]-6, 2*hp2+0.09*SV, 3.2, 1.2, null, '#F2EFE7');
         rc(pp[0]-hp2-0.075*SV, pp[1]-9, 2*hp2+0.15*SV, 3.2, 1.2, null, '#F2EFE7');
