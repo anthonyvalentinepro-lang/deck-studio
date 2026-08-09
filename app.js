@@ -308,12 +308,14 @@ function resolve(){
     const nStr = Math.max(2, Math.ceil(sw*12/18)+1);
     const slope = Math.sqrt(runT*runT + drop*drop);
     const ang = Math.atan2(drop, runT) * dir;
+    const toeRun = Math.max(runL, (n-1)*runL);   // stair lands at the last riser - no toe overhang
+    const toeDrop = drop*toeRun/runT;            // vertical over that run (same nosing slope)
     for (let s2=0;s2<nStr;s2++){
       const sxo = cx - sw/2 + 0.08 + s2*((sw-0.16)/(nStr-1));
-      // notched stringer built honestly: a low sloped carriage that can never break the tread
-      // plane, plus sawtooth step blocks carrying each tread down to the carriage
-      T.push({t:'stringer', sh:'box', lx:sxo, ly:yTop - drop/2 - (rise + 0.4), lz:z0 + dir*(runT/2 + 0.15),
-        dx:0.13, dy:0.5, dz:Math.max(1, slope - 0.3), rotX:ang, tier:tier, m:{dir:dir, rise:rise, n:n}});
+      // notched stringer: low sloped carriage under the treads (same angle as the tread grid),
+      // trimmed so its toe lands at the bottom step (no overhang past the footing)
+      T.push({t:'stringer', sh:'box', lx:sxo, ly:yTop - toeDrop/2 - (rise + 0.4), lz:z0 + dir*(toeRun/2),
+        dx:0.13, dy:0.5, dz:Math.max(1, toeRun*slope/runT), rotX:ang, tier:tier, m:{dir:dir, rise:rise, n:n}});
       for (let k=-1; k<n-1; k++){
         const tTop = yTop - rise*(k+1);
         T.push({t:'stringer', sh:'box', lx:sxo, ly:tTop - 0.12 - rise*0.45, lz:z0 + dir*(k+0.5)*runL,
@@ -331,14 +333,15 @@ function resolve(){
       }
     }
     if (railOn){
+      const rr = toeRun, midDrop = toeDrop, rdz = rr*slope/runT;   // deck edge -> bottom newel
       [cx - sw/2, cx + sw/2].forEach(function(hx){
         [3.0, 0.35].forEach(function(hy){
-          T.push({t:'rail', sh:'box', lx:hx, ly:yTop - drop/2 + hy, lz:z0 + dir*runT/2,
-            dx:0.12, dy:0.12, dz:slope, rotX:ang, tier:tier, m:{pos:'stair'}});
+          T.push({t:'rail', sh:'box', lx:hx, ly:yTop - midDrop/2 + hy, lz:z0 + dir*(rr/2),
+            dx:0.12, dy:0.12, dz:rdz, rotX:ang, tier:tier, m:{pos:'stair'}});
         });
-        const nB = Math.max(2, Math.ceil(runT/0.32));
+        const nB = Math.max(2, Math.ceil(rr/0.32));
         for (let k=1;k<nB;k++){
-          const bz = k*(runT/nB);
+          const bz = k*(rr/nB);
           const surfY = yTop - drop*(bz/runT);       // tread/nosing line at this run
           T.push({t:'baluster', sh:'box', lx:hx, ly:surfY + 1.45, lz:z0 + dir*bz,
             dx:0.08, dy:2.9, dz:0.08, tier:tier, m:{}});   // foot on the tread, ~35" to the rail
@@ -360,16 +363,15 @@ function resolve(){
     T.push({t:'stairhdr', sh:'box', lx:0, ly:hft-0.36, lz:-0.24, dx:sw+0.5, dy:0.62, dz:0.13, tier:tier, m:{plies:2}});
     if (!swb){
       flight(tier, T, risers, rise, sw, hft, 0, 0, 1, ron);
-      const footZ = risers*runL - 0.35;   // under the stringer toe where it lands at grade
+      const footZ = (risers-1)*runL;   // at the bottom of the stair (stringer toe / bottom newel)
       [-(sw/2-0.45), sw/2-0.45].forEach(function(fx){
         const sd = (risers > 10 || sw >= 5) ? 10 : 8;
         T.push({t:'footing', sh:'cyl', lx:fx, ly:0.11, lz:footZ, r:sd/24, len:0.22, tier:tier, m:{dia:sd, kind:'sono'}});
       });
       if (ron){
-        const bz = (risers-1.5)*runL, surfY = 1.5*rise;   // bottom tread surface
         [-sw/2, sw/2].forEach(function(hx){
-          T.push({t:'railpost', sh:'box', lx:hx, ly:surfY + 1.6, lz:bz, dx:0.2, dy:3.2, dz:0.2, tier:tier, m:{}});
-          T.push({t:'railpost', sh:'box', lx:hx, ly:surfY + 3.26, lz:bz, dx:0.28, dy:0.12, dz:0.28, tier:tier, m:{cap:true}});
+          T.push({t:'railpost', sh:'box', lx:hx, ly:1.6, lz:footZ, dx:0.2, dy:3.2, dz:0.2, tier:tier, m:{}});
+          T.push({t:'railpost', sh:'box', lx:hx, ly:3.26, lz:footZ, dx:0.28, dy:0.12, dz:0.28, tier:tier, m:{cap:true}});
         });
       }
     } else {
@@ -536,7 +538,7 @@ function renderTakeoff(){
       ['Joists', K.joists+' @ '+c.jsize+' / '+S.spacing+'" OC'+(c.needMid?' / 2 spans':'')],
       ['Girder'+(c.beamRows>1?'s':''), c.beamRows+' x (3)2x10 typ'],
       ['Rim/band', K.rims+' x '+c.jsize+' PT'],
-      ['Blocking', K.blocking ? K.blocking+' pcs @ mid-span' : 'not req’d at this span'],
+      ['Blocking', K.blocking ? K.blocking+' pcs @ mid-span' : 'not reqd at this span'],
       ['Posts 6x6 PT', K.posts + (K.landingPosts ? ' + '+K.landingPosts+' landing' : '')],
       ['Footings', K.footingsMain+' @ '+c.dia+'" dia'],
       ['Footing depth', '36" below grade'],
@@ -547,16 +549,16 @@ function renderTakeoff(){
     rows.push(['Hardware', hwStr]);
     if (S.rail) rows.push(['Railing', '~'+c.railLF+' LF']);
     if (S.stairs){ const sp2 = stairPlace(); rows.push(['Stairs', (sp2 ? sp2.sw : S.stairW)+"' wide / "+c.risers+' risers / '+K.stringersT1+' stringers'+(c.swb?' / switchback':'')]); }
-    if (S.stairs && c.risers >= 4) rows.push(['Handrail', 'required (4+ risers) — included']);
+    if (S.stairs && c.risers >= 4) rows.push(['Handrail', 'required (4+ risers) - included']);
     if (S.stairs) rows.push(['Stair footings', K.footingsSono+' @ 8" dia sonotube']);
     if (S.stairs) rows.push(['Stair landing', '36" min pad at grade']);
-    rows.push(['Guards', c.guardReq ? 'REQUIRED (>30") — included' : 'not required']);
-    if (S.h >= 72) rows.push(['Post bracing', 'knee braces req’d']);
+    rows.push(['Guards', c.guardReq ? 'REQUIRED (>30") - included' : 'not required']);
+    if (S.h >= 72) rows.push(['Post bracing', 'knee braces reqd']);
     note = (c.swb ? 'Over 12 risers: mid landing added, stair shown as a standard switchback. ' : '')
       + (c.needMid ? 'Second girder row added: joist span is past the 2x10 table. ' : '')
       + (c.spliced ? 'Girder spliced over posts for stock length. ' : '')
-      + (S.h >= 72 ? 'Posts over 6 ft get diagonal knee bracing — final bracing in the drawings. ' : '')
-      + (S.ledger ? 'Attached decks get (2) lateral-load hold-downs near the deck edges per the IRC deck provisions — located in your permit set. ' : '');
+      + (S.h >= 72 ? 'Posts over 6 ft get diagonal knee bracing - final bracing in the drawings. ' : '')
+      + (S.ledger ? 'Attached decks get (2) lateral-load hold-downs near the deck edges per the IRC deck provisions - located in your permit set. ' : '');
   } else {
     rows = [
       ['Deck area', c.area+' sq ft / 2 tiers'],
@@ -564,7 +566,7 @@ function renderTakeoff(){
       ['Lower joists', K.joistsLo+' @ '+c.lo.jsize+' / '+S.spacing+'" OC'+(c.lo.needMid?' / 2 spans':'')],
       ['Girders', K.beams+' x (3)2x10 typ'],
       ['Rim/band', K.rims+' x 2x10 PT'],
-      ['Blocking', K.blocking ? K.blocking+' pcs @ mid-span' : 'not req’d at this span'],
+      ['Blocking', K.blocking ? K.blocking+' pcs @ mid-span' : 'not reqd at this span'],
       ['Posts 6x6 PT', K.posts + (K.landingPosts ? ' + '+K.landingPosts+' landing' : '')],
       ['Footings', K.footStr],
       ['Footing depth', '36" below grade'],
@@ -576,14 +578,14 @@ function renderTakeoff(){
     if (S.rail) rows.push(['Railing', '~'+c.railLF+' LF']);
     if (c.tierRisers > 0) rows.push(['Tier stair', c.tg.tierSw+"' wide / "+c.tierRisers+' risers / '+K.stringersT1+' stringers']);
     if (S.stairs && c.gsp) rows.push(['Grade stair', c.gsp.sw+"' wide / "+c.gradeRisers+' risers / '+K.stringersT2+' stringers'+(c.swb?' / switchback':'')]);
-    if (S.stairs && c.gradeRisers >= 4) rows.push(['Handrail', 'required (4+ risers) — included']);
+    if (S.stairs && c.gradeRisers >= 4) rows.push(['Handrail', 'required (4+ risers) - included']);
     if (S.stairs) rows.push(['Stair footings', K.footingsSono+' @ 8" dia sonotube']);
     if (S.stairs) rows.push(['Stair landing', '36" min pad at grade']);
-    rows.push(['Guards', c.guardReq ? 'REQUIRED (>30") — included' : (c.guardLo ? 'REQUIRED on lower (>30") — included' : 'not required')]);
-    if (S.h >= 72) rows.push(['Post bracing', 'knee braces req’d']);
+    rows.push(['Guards', c.guardReq ? 'REQUIRED (>30") - included' : (c.guardLo ? 'REQUIRED on lower (>30") - included' : 'not required')]);
+    if (S.h >= 72) rows.push(['Post bracing', 'knee braces reqd']);
     note = 'Lower tier hangs on the upper girder posts: shared row runs '+c.sharedPer+' posts on '+c.sharedDia+'" footings. '
-      + (S.h >= 72 ? 'Posts over 6 ft get diagonal knee bracing — final bracing in the drawings. ' : '')
-      + (S.ledger ? 'Attached decks get (2) lateral-load hold-downs near the deck edges per the IRC deck provisions — located in your permit set. ' : '')
+      + (S.h >= 72 ? 'Posts over 6 ft get diagonal knee bracing - final bracing in the drawings. ' : '')
+      + (S.ledger ? 'Attached decks get (2) lateral-load hold-downs near the deck edges per the IRC deck provisions - located in your permit set. ' : '')
       + (c.tierOver ? 'Tier stair run passes the lower edge at this depth: final stair layout is set in the drawings. ' : '')
       + (c.swb ? 'Grade stair over 12 risers: mid landing added, shown as a standard switchback. ' : '')
       + ((c.up.needMid || c.lo.needMid) ? 'Mid girder row added where the joist span runs past the 2x10 table. ' : '')
@@ -593,7 +595,7 @@ function renderTakeoff(){
     return '<div class="row"><span>'+r[0]+'</span><b class="'+(i<2?'hl':'')+'">'+r[1]+'</b></div>';
   }).join('') + '<p class="note">'
     + note
-    + 'Hardware counts are placement counts. Framing #2 SYP pressure-treated. Decking includes 12% waste (more for diagonal or picture-frame layouts). Footings 36 in below grade (at or below NJ frost depth), sized for 1,500 psf soil. Planning numbers for visualization and pricing — connector models, fastener schedules and final sizes are specified in your 18x24 permit set.</p>';
+    + 'Hardware counts are placement counts. Framing #2 SYP pressure-treated. Decking includes 12% waste (more for diagonal or picture-frame layouts). Footings 36 in below grade (at or below NJ frost depth), sized for 1,500 psf soil. Planning numbers for visualization and pricing - connector models, fastener schedules and final sizes are specified in your 18x24 permit set.</p>';
   document.getElementById('railNote').textContent = c.tier2
     ? (c.guardReq || c.guardLo ? 'Tier surfaces over 30 inches above grade: guards are required by code.' : 'Both tiers under 30 inches: guards optional in most towns.')
     : (c.guardReq
@@ -1366,7 +1368,7 @@ function renderPlanTier2(c, W, H, m, availW, availH){
       rect(0, 0, swp, planSl);
       if (MODE==='framing'){
         (function(){
-          const nStr = Math.max(2, Math.ceil((planSp.sw)*12/18)+1), th = Math.max(1.2, 0.125*sc);
+          const nStr = Math.max(2, Math.ceil((gsp.sw)*12/18)+1), th = Math.max(1.2, 0.125*sc);
           for (let si=0; si<nStr; si++){ const su = 6 + si*((swp-12)/(nStr-1)); tline(su-th/2, 2, su-th/2, planSl-2); tline(su+th/2, 2, su+th/2, planSl-2); }
         })();
         sf(7, planSl - 7); sf(swp - 7, planSl - 7);
@@ -1671,7 +1673,7 @@ function renderElevation(kind){
   };
   let SV;
   let dbgStair = null;
-  // head-on stair: risers stacked between topY and botY across the opening — used when the
+  // head-on stair: risers stacked between topY and botY across the opening - used when the
   // flight descends toward/away from the viewer (front stairs in FRONT view, end stairs in SIDE view)
   const frontalStair = function(sxL, swPx, topY, botY, risers, sono, hrOn){
     const RAILON = (hrOn !== undefined) ? hrOn : (S.rail || risers >= 4);
@@ -1955,13 +1957,13 @@ function sanitizeS(){
   if ([3,4,5].indexOf(+S.stairW) < 0) S.stairW = 4; else S.stairW = +S.stairW;
   if (['fl','fc','fr','el','er'].indexOf(S.stairPos) < 0) S.stairPos = 'fr';
   // a lower tier wider than the upper would cantilever the shared girder and open unguarded
-  // edges — clamp to the upper width (mirrors the h2 clamp)
+  // edges - clamp to the upper width (mirrors the h2 clamp)
   if (S.tier2 && S.w2 > S.w) S.w2 = S.w;
 }
 function refresh(){
   sanitizeS();
   modelDirty();
-  // code: guards are not optional over 30" — the tool includes them automatically
+  // code: guards are not optional over 30" - the tool includes them automatically
   const guardMust = S.h > 30 || (S.tier2 && h2eff() > 30);
   if (guardMust && !S.rail) S.rail = true;
   const swR = document.getElementById('swRail');
