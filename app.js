@@ -1471,7 +1471,7 @@ function renderElevation(kind){
   const tx = function(x,y,t,size,anch,bold,col){
     s += '<text x="'+x+'" y="'+y+'" '+(anch?'text-anchor="'+anch+'" ':'')+'font-family="IBM Plex Mono" '+(bold?'font-weight="600" ':'')+'font-size="'+(size||10)+'" fill="'+(col||'#0C0E11')+'">'+t+'</text>';
   };
-  const DF = MOB?14.5:12;
+  const DF = MOB?10.5:8.5;
   const vdim = function(x,y1,y2,label){
     ln(x,y1,x,y2,1.2,null,null,true); ln(x-5,y1,x+5,y1,1,null,null,true); ln(x-5,y2,x+5,y2,1,null,null,true);
     s += '<path d="M'+x+' '+y1+' l-4 7 l8 0 z" fill="#0C0E11"/><path d="M'+x+' '+y2+' l-4 -7 l8 0 z" fill="#0C0E11"/>';
@@ -1537,16 +1537,32 @@ function renderElevation(kind){
     ln(x0s, topY+1.5*rise, x0s + dirR*(n-1.5)*runp, botY, 1.2, null, 0.85);
     if (withRail && S.rail){
       const g1x=x0s+0.12*SV*dirR, g1y=topY-3.0*SV, g2x=ex2-runp*dirR*0.5, g2y=botY-3.0*SV+6;
-      ln(g1x,g1y,g2x,g2y,2.2);
-      ln(g1x,g1y+0.5*SV,g2x,g2y+0.5*SV,1.2);
-      const nb2=Math.max(3,Math.floor(Math.abs(g2x-g1x)/(0.38*SV)));
-      const nosY = function(bx){ const t3=(bx-x0s)/(dirR*n*runp); return (topY+rise) + (botY-(topY+rise))*Math.max(0,Math.min(1,t3)); };
-      for (let b3=1;b3<nb2;b3++){
-        const bt=b3/nb2, bx2=g1x+(g2x-g1x)*bt, by1=g1y+(g2y-g1y)*bt+0.5*SV;
-        ln(bx2,by1,bx2,Math.max(by1+4, nosY(bx2)-0.06*SV),0.6,null,0.65);
+      const capH=Math.max(2.5,0.16*SV), subH=Math.max(2,0.11*SV), botH=Math.max(2,0.12*SV);
+      const railBotOff = 3.0*SV-0.35*SV-botH;
+      const poly=function(xa,ya,xb,yb,h){
+        s += '<path d="M'+xa+' '+ya+' L'+xb+' '+yb+' L'+xb+' '+(yb+h)+' L'+xa+' '+(ya+h)+' Z" fill="#F2EFE7" stroke="#0C0E11" stroke-width="1.1"/>';
+        upd(xa,ya); upd(xb,yb+h);
+      };
+      // same rail build as the deck guard, following the slope
+      poly(g1x,g1y,g2x,g2y,capH);
+      poly(g1x,g1y+capH,g2x,g2y+capH,subH);
+      poly(g1x,g1y+railBotOff,g2x,g2y+railBotOff,botH);
+      // plumb flat balusters between sub-rail and bottom rail
+      const bw2=Math.max(1.6,0.12*SV), pitch2=Math.max(bw2*2.1,0.34*SV);
+      const span2=Math.abs(g2x-g1x), nB3=Math.floor(span2/pitch2);
+      for (let b3=1;b3<nB3;b3++){
+        const bt=b3/nB3, bx2=g1x+(g2x-g1x)*bt;
+        const yTopB=g1y+(g2y-g1y)*bt+capH+subH, yBotB=g1y+(g2y-g1y)*bt+railBotOff;
+        rc(bx2-bw2/2, yTopB, bw2, yBotB-yTopB, 0.9, null, '#F2EFE7');
       }
-      rc(g1x-0.14*SV,g1y,0.28*SV,topY-g1y,1.3, null, '#F2EFE7');
-      rc(g2x-0.14*SV,g2y,0.28*SV,botY-g2y,1.3, null, '#F2EFE7');
+      // end posts with layered caps + base collars (deck-guard design)
+      [[g1x, topY],[g2x, botY]].forEach(function(pp){
+        const hp2=Math.max(2.2,0.17*SV), py=pp[0]===g1x? g1y : g2y;
+        rc(pp[0]-hp2, py-3, 2*hp2, pp[1]-(py-3), 1.3, null, '#F2EFE7');
+        rc(pp[0]-hp2-0.045*SV, py-6, 2*hp2+0.09*SV, 3.2, 1.2, null, '#F2EFE7');
+        rc(pp[0]-hp2-0.075*SV, py-9, 2*hp2+0.15*SV, 3.2, 1.2, null, '#F2EFE7');
+        rc(pp[0]-hp2-0.055*SV, pp[1]-Math.max(3,0.22*SV), 2*hp2+0.11*SV, Math.max(3,0.22*SV), 1.2, null, '#F2EFE7');
+      });
     }
     return ex2;
   };
@@ -1631,8 +1647,11 @@ function renderElevation(kind){
     ln(sxL, topY, sxL, botY, 1.6); ln(sxR, topY, sxR, botY, 1.6);
     for (let r2=1; r2<risers; r2++){ const yy = topY + r2*((botY-topY)/risers); ln(sxL, yy, sxR, yy, 1); }
     if (S.rail){
-      rc(sxL-0.14*SV, topY-3.0*SV, 0.28*SV, (botY-8)-(topY-3.0*SV), 1.3);
-      rc(sxR-0.14*SV, topY-3.0*SV, 0.28*SV, (botY-8)-(topY-3.0*SV), 1.3);
+      [sxL, sxR].forEach(function(gx4){
+        rc(gx4-0.14*SV, topY-3.0*SV, 0.28*SV, (botY-8)-(topY-3.0*SV), 1.3, null, '#F2EFE7');
+        rc(gx4-0.185*SV, topY-3.0*SV-3.2, 0.37*SV, 3.2, 1.2, null, '#F2EFE7');
+        rc(gx4-0.215*SV, topY-3.0*SV-6.4, 0.43*SV, 3.2, 1.2, null, '#F2EFE7');
+      });
     }
     if (sono){ footing(sxL+0.35*SV, 0.7*SV); footing(sxR-0.35*SV, 0.7*SV); }
   };
@@ -1716,7 +1735,7 @@ function renderElevation(kind){
     // ---- dim lanes from measured bounds ----
     const LX=B.x0-28, RX=B.x1+30, TY=B.y0-22, BY=Math.max(B.y1, GY+30)+22;
     hdim(x0, x0+dw, TY, w+"'-0\"", null);
-    tx((x0+dw/2), TY+11, 'PROPOSED DECK', 7.5, 'middle');
+    tx((x0+dw/2), TY+11, 'PROPOSED DECK', DF, 'middle');
     vdim(RX, deckTop, GY, S.h+'"');
     if (c.tier2 && loTop!==null) vdim(RX+30, loTop, GY, c.h2e+'"');
     if (S.rail) vdim(LX, deckTop-3.0*SV, deckTop, '36"');
