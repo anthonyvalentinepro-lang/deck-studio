@@ -261,7 +261,10 @@ function resolve(){
   }
   function railing(tier, w, d, hft, cut, includeBack, ox, oz){
     const railTop = 3.0, botY = 0.35;
-    railSegs(w, d, cut, includeBack).forEach(function(sg){
+    railSegs(w, d, cut, includeBack).forEach(function(sg0){
+      // post sleeves mount on the deck surface: pull the run inboard so the outer post face
+      // lands flush with the fascia instead of overhanging it
+      const sg = {axis:sg0.axis, at:sg0.at - Math.sign(sg0.at)*0.12, a:sg0.a, b:sg0.b};
       const len = sg.b - sg.a; if (len < 0.8) return;
       const mid = (sg.a + sg.b)/2;
       const P = function(off){ return sg.axis==='x' ? {x:ox+off, z:oz+sg.at} : {x:ox+sg.at, z:oz+off}; };
@@ -275,7 +278,8 @@ function resolve(){
       }
       const nP = Math.max(2, Math.ceil(len/6)+1);
       for (let p2=0;p2<nP;p2++){
-        const q = P(sg.a + p2*(len/(nP-1)));
+        const off = Math.max(sg.a+0.28, Math.min(sg.b-0.28, sg.a + p2*(len/(nP-1))));
+        const q = P(off);
         add('railpost','box',{x:q.x, y:hft+(railTop+0.22)/2, z:q.z, dx:0.32, dy:railTop+0.22, dz:0.32, tier:tier});
         add('railpost','box',{x:q.x, y:hft+railTop+0.28, z:q.z, dx:0.46, dy:0.11, dz:0.46, tier:tier, m:{cap:true}});
       }
@@ -299,8 +303,8 @@ function resolve(){
       const sxo = cx - sw/2 + 0.08 + s2*((sw-0.16)/(nStr-1));
       // notched (closed) stringer: held low so the sawtooth never shows above the treads;
       // with solid risers the cut line is fully concealed
-      T.push({t:'stringer', sh:'box', lx:sxo, ly:yTop - drop/2 - 0.58, lz:z0 + dir*runT/2,
-        dx:0.13, dy:0.5, dz:slope, rotX:ang, tier:tier, m:{dir:dir}});
+      T.push({t:'stringer', sh:'box', lx:sxo, ly:yTop - drop/2 - 0.74, lz:z0 + dir*(runT/2 + 0.22),
+        dx:0.13, dy:0.5, dz:Math.max(1, slope - 0.55), rotX:ang, tier:tier, m:{dir:dir}});
     }
     // closed flight: risers span rise-to-rise (no see-through), treads sit on top with a nosing
     for (let st=0; st<n; st++){
@@ -1411,15 +1415,15 @@ function renderElevation(kind){
   const railFront = function(xa,xb,rt){
     const topY = rt - 3.0*SV, botY = rt - 0.35*SV;
     ln(xa,topY,xb,topY,2.2); ln(xa,botY,xb,botY,1.4);
+    for (let bx=xa+0.38*SV; bx<xb; bx+=0.38*SV){ ln(bx,botY,bx,topY,0.6,null,0.65); }
     const span = xb-xa, nP = Math.max(2, Math.ceil(span/(6*SV))+1);
     const hp = 0.16*SV;
     for (let i2=0;i2<nP;i2++){
       let px2 = xa + i2*(span/(nP-1));
       px2 = Math.min(Math.max(px2, xa+hp), xb-hp);
-      rc(px2-hp, topY-4, 2*hp, rt-topY+4, 1.4);
-      rc(px2-0.21*SV, topY-8, 0.42*SV, 4, 1.2);
+      rc(px2-hp, topY-4, 2*hp, rt-topY+4, 1.4, null, '#F2EFE7');
+      rc(px2-0.21*SV, topY-8, 0.42*SV, 4, 1.2, null, '#F2EFE7');
     }
-    for (let bx=xa+0.38*SV; bx<xb; bx+=0.38*SV){ ln(bx,botY,bx,topY,0.6,null,0.65); }
   };
   const deckBand = function(xa,xb,topZ){
     rc(xa, topZ, xb-xa, 0.95*SV, 2, null, '#F2EFE7');
@@ -1437,7 +1441,7 @@ function renderElevation(kind){
     for (let r2=0;r2<risers;r2++){ py2 += rise; path += ' L'+ex2+' '+py2; ex2 += dirR*runp; path += ' L'+ex2+' '+py2; }
     s += '<path d="'+path+'" fill="none" stroke="#0C0E11" stroke-width="1.6"/>';
     upd(x0s, topZ); upd(ex2, GY);
-    ln(x0s, topZ+rise, ex2-dirR*runp*0.6, GY, 1.2, null, 0.8);
+    ln(x0s, topZ+1.5*rise, x0s + dirR*(risers-1.5)*runp, GY, 1.2, null, 0.85);
     footing(x0s + dirR*(risers*runp)/2, 0.7*SV);
     if (withRail && S.rail){
       const g1x=x0s+0.12*SV*dirR, g1y=topZ-3.0*SV, g2x=ex2-runp*dirR*0.5, g2y=GY-3.0*SV+6;
@@ -1448,8 +1452,8 @@ function renderElevation(kind){
         const bt=b3/nb2, bx2=g1x+(g2x-g1x)*bt, by1=g1y+(g2y-g1y)*bt+0.5*SV;
         ln(bx2,by1,bx2,Math.min(by1+2.5*SV,GY),0.6,null,0.65);
       }
-      rc(g1x-0.14*SV,g1y,0.28*SV,topZ-g1y,1.3);
-      rc(g2x-0.14*SV,g2y,0.28*SV,GY-g2y,1.3);
+      rc(g1x-0.14*SV,g1y,0.28*SV,topZ-g1y,1.3, null, '#F2EFE7');
+      rc(g2x-0.14*SV,g2y,0.28*SV,GY-g2y,1.3, null, '#F2EFE7');
     }
     return ex2;
   };
@@ -1489,8 +1493,6 @@ function renderElevation(kind){
     const yG=deckTop+0.95*SV;
     // girder: visible solid (3)2x10 band across the width; posts bear on its underside
     rc(x0+1.0*SV, yG, dw-2.0*SV, 0.8*SV, 1.6);
-    ln(x0+1.0*SV, yG+0.27*SV, x0+dw-1.0*SV, yG+0.27*SV, 0.7, null, 0.6);
-    ln(x0+1.0*SV, yG+0.54*SV, x0+dw-1.0*SV, yG+0.54*SV, 0.7, null, 0.6);
     const per=c.perRow, run=Math.max(0.5,w-3);
     let px1st=0;
     for (let i2=0;i2<per;i2++){
@@ -1528,7 +1530,6 @@ function renderElevation(kind){
       deckBand(lx0, lx0+lw, loTop);
       const yG2=loTop+0.95*SV, run2=Math.max(0.5,w2-3), per2=c.lo.perRow;
       rc(lx0+1.0*SV, yG2, Math.max(2*SV, lw-2.0*SV), 0.8*SV, 1.6);
-      ln(lx0+1.0*SV, yG2+0.27*SV, lx0+lw-1.0*SV, yG2+0.27*SV, 0.7, null, 0.6);
       for (let i2=0;i2<per2;i2++){ postAt(lx0+(1.5+(per2===1?0:i2*(run2/(per2-1))))*SV, yG2+0.8*SV); }
       let gA=null, gB=null;
       if (S.stairs && c.gsp && c.gsp.edge==='front'){
@@ -1586,8 +1587,8 @@ function renderElevation(kind){
     const yJb=deckTop+2+0.83*SV;
     const gx=faceX+(S.d-1.5)*SV;
     rc(gx-0.24*SV, yJb, 0.48*SV, 0.85*SV, 1.8);
-    ln(gx-0.24*SV, yJb+0.28*SV, gx+0.24*SV, yJb+0.28*SV, 0.7, null, 0.7);
-    ln(gx-0.24*SV, yJb+0.56*SV, gx+0.24*SV, yJb+0.56*SV, 0.7, null, 0.7);
+    ln(gx-0.08*SV, yJb, gx-0.08*SV, yJb+0.85*SV, 0.7, null, 0.7);
+    ln(gx+0.08*SV, yJb, gx+0.08*SV, yJb+0.85*SV, 0.7, null, 0.7);
     postAt(gx, yJb+0.85*SV);
     if (!S.ledger){ const gx0=faceX+1.5*SV; rc(gx0-0.24*SV,yJb,0.48*SV,0.85*SV,1.8); postAt(gx0, yJb+0.85*SV); }
     let cutSA=null, cutSB=null;
