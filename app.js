@@ -1537,7 +1537,7 @@ function renderElevation(kind){
     ln(x0s, topY+1.5*rise, x0s + dirR*(n-1.5)*runp, botY, 1.2, null, 0.85);
     // tread boards: thickness + nose overhang so each step reads
     const tth = Math.max(2, 0.10*SV), nose = 0.06*SV;
-    for (let r2=0;r2<n;r2++){
+    for (let r2=0;r2<n-1;r2++){
       const ty = topY + rise*(r2+1);
       const faceX2 = x0s + dirR*(r2*runp);
       const xA = Math.min(faceX2 - dirR*nose, faceX2 + dirR*runp);
