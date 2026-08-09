@@ -231,7 +231,7 @@ function resolve(){
     });
     // beams + posts + footings + post bases
     rows.forEach(function(rs){
-      add('beam','box',{x:ox, y:hft-0.85, z:oz+rs.z, dx:w, dy:0.8, dz:0.42, tier:tier, m:Object.assign({plies:3, size:'2x10'}, rs.m||{})});
+      add('beam','box',{x:ox, y:hft-0.85, z:oz+rs.z, dx:Math.max(1, w-2), dy:0.8, dz:0.42, tier:tier, m:Object.assign({plies:3, size:'2x10'}, rs.m||{})});
       if (rs.noPosts) return;
       const per = rs.per;
       for (let p2=0;p2<per;p2++){
@@ -297,14 +297,19 @@ function resolve(){
     const ang = Math.atan2(drop, runT) * dir;
     for (let s2=0;s2<nStr;s2++){
       const sxo = cx - sw/2 + 0.08 + s2*((sw-0.16)/(nStr-1));
-      T.push({t:'stringer', sh:'box', lx:sxo, ly:yTop - drop/2 - 0.42, lz:z0 + dir*runT/2,
-        dx:0.13, dy:0.62, dz:slope, rotX:ang, tier:tier, m:{dir:dir}});
+      // notched (closed) stringer: held low so the sawtooth never shows above the treads;
+      // with solid risers the cut line is fully concealed
+      T.push({t:'stringer', sh:'box', lx:sxo, ly:yTop - drop/2 - 0.58, lz:z0 + dir*runT/2,
+        dx:0.13, dy:0.5, dz:slope, rotX:ang, tier:tier, m:{dir:dir}});
     }
+    // closed flight: risers span rise-to-rise (no see-through), treads sit on top with a nosing
     for (let st=0; st<n; st++){
-      T.push({t:'tread', sh:'box', lx:cx, ly:yTop - rise*(st+1) + rise/2, lz:z0 + dir*(runL/2 + st*runL),
-        dx:sw, dy:(1/12)*1.4, dz:runL, tier:tier, m:{kind:'tread'}});
-      T.push({t:'tread', sh:'box', lx:cx, ly:yTop - rise*(st+1), lz:z0 + dir*(st*runL),
-        dx:sw, dy:rise, dz:0.1, tier:tier, m:{kind:'riser'}});
+      T.push({t:'tread', sh:'box', lx:cx, ly:yTop - rise*st - rise/2, lz:z0 + dir*(st*runL) + dir*0.04,
+        dx:sw, dy:rise+0.02, dz:0.1, tier:tier, m:{kind:'riser'}});
+      if (st < n-1){
+        T.push({t:'tread', sh:'box', lx:cx, ly:yTop - rise*(st+1) - 0.06, lz:z0 + dir*(runL/2 + st*runL) - dir*0.03,
+          dx:sw, dy:0.12, dz:runL+0.1, tier:tier, m:{kind:'tread'}});
+      }
     }
     if (railOn){
       [cx - sw/2, cx + sw/2].forEach(function(hx){
@@ -911,6 +916,11 @@ function renderPlan(){
     s += '<line x1="'+(x0-6)+'" y1="'+(by-2.2)+'" x2="'+(x0+dw+6)+'" y2="'+(by-2.2)+'" stroke="#0C0E11" stroke-width="1.4" stroke-dasharray="10 5"/>';
     s += '<line x1="'+(x0-6)+'" y1="'+(by+2.2)+'" x2="'+(x0+dw+6)+'" y2="'+(by+2.2)+'" stroke="#0C0E11" stroke-width="1.4" stroke-dasharray="10 5"/>';
     const pxsRow = MQ.postsAt(1, zRow).map(function(mx){ return x0 + (mx + S.w/2)*sc; });
+    // 6x6 posts drawn as solid squares on the girder (footing circle-X around them)
+    const psq = Math.max(3.5, 0.46*sc);
+    pxsRow.forEach(function(px){
+      s += '<rect x="'+(px-psq/2)+'" y="'+(by-psq/2)+'" width="'+psq+'" height="'+psq+'" fill="#0C0E11"/>';
+    });
     pxsRow.forEach(function(px){
       s += '<circle cx="'+px+'" cy="'+by+'" r="'+fr9+'" fill="none" stroke="#FF5A1F" stroke-width="2.5"/>';
       s += '<line x1="'+(px-fr9*0.7)+'" y1="'+(by-fr9*0.7)+'" x2="'+(px+fr9*0.7)+'" y2="'+(by+fr9*0.7)+'" stroke="#FF5A1F" stroke-width="1.6"/>';
@@ -1154,8 +1164,10 @@ function renderPlanTier2(c, W, H, m, availW, availH){
     const perHere = shared ? c.sharedPer : c.up.perRow;
     const fr = Math.max(7, Math.round(9 * diaHere/16));
     s += '<line x1="'+(X(-w/2)-6)+'" y1="'+by+'" x2="'+(X(w/2)+6)+'" y2="'+by+'" stroke="#0C0E11" stroke-width="2.5" stroke-dasharray="10 5"/>';
+    const psqU = Math.max(3.5, 0.46*sc);
     for (let p=0;p<perHere;p++){
       const px = X(-w/2)+1.5*sc + p*((w-3)*sc/(perHere-1));
+      s += '<rect x="'+(px-psqU/2)+'" y="'+(by-psqU/2)+'" width="'+psqU+'" height="'+psqU+'" fill="#0C0E11"/>';
       s += '<circle cx="'+px+'" cy="'+by+'" r="'+fr+'" fill="none" stroke="#FF5A1F" stroke-width="2.5"/>';
       s += '<line x1="'+(px-fr*0.7)+'" y1="'+(by-fr*0.7)+'" x2="'+(px+fr*0.7)+'" y2="'+(by+fr*0.7)+'" stroke="#FF5A1F" stroke-width="1.6"/>';
       s += '<line x1="'+(px-fr*0.7)+'" y1="'+(by+fr*0.7)+'" x2="'+(px+fr*0.7)+'" y2="'+(by-fr*0.7)+'" stroke="#FF5A1F" stroke-width="1.6"/>';
@@ -1186,8 +1198,10 @@ function renderPlanTier2(c, W, H, m, availW, availH){
   rowsZL.forEach(function(z){
     const by = Y(z);
     s += '<line x1="'+(X(tg.cx2-w2/2)-6)+'" y1="'+by+'" x2="'+(X(tg.cx2+w2/2)+6)+'" y2="'+by+'" stroke="#0C0E11" stroke-width="2.5" stroke-dasharray="10 5"/>';
+    const psqL = Math.max(3.5, 0.46*sc);
     for (let p=0;p<c.lo.perRow;p++){
       const px = X(tg.cx2-w2/2)+1.5*sc + p*(Math.max(0.5,w2-3)*sc/(c.lo.perRow-1));
+      s += '<rect x="'+(px-psqL/2)+'" y="'+(by-psqL/2)+'" width="'+psqL+'" height="'+psqL+'" fill="#0C0E11"/>';
       s += '<circle cx="'+px+'" cy="'+by+'" r="'+frL+'" fill="none" stroke="#FF5A1F" stroke-width="2.5"/>';
       s += '<line x1="'+(px-frL*0.7)+'" y1="'+(by-frL*0.7)+'" x2="'+(px+frL*0.7)+'" y2="'+(by+frL*0.7)+'" stroke="#FF5A1F" stroke-width="1.6"/>';
       s += '<line x1="'+(px-frL*0.7)+'" y1="'+(by+frL*0.7)+'" x2="'+(px+frL*0.7)+'" y2="'+(by-frL*0.7)+'" stroke="#FF5A1F" stroke-width="1.6"/>';
@@ -1446,6 +1460,10 @@ function renderElevation(kind){
   const frontalStair = function(sxL, swPx, topY, botY, risers, sono){
     dbgStair = 'frontal';
     const sxR = sxL + swPx;
+    // the flight is nearer the viewer than the deck: it occludes the structure behind it
+    s += '<rect x="'+sxL+'" y="'+topY+'" width="'+swPx+'" height="'+(botY-topY)+'" fill="#F2EFE7"/>';
+    upd(sxL, topY); upd(sxR, botY);
+    ln(sxL, topY, sxR, topY, 1.6);
     ln(sxL, topY, sxL, botY, 1.6); ln(sxR, topY, sxR, botY, 1.6);
     for (let r2=1; r2<risers; r2++){ const yy = topY + r2*((botY-topY)/risers); ln(sxL, yy, sxR, yy, 1); }
     if (S.rail){
@@ -1469,14 +1487,16 @@ function renderElevation(kind){
     const deckTop=GY-hft*SV;
     deckBand(x0, x0+dw, deckTop);
     const yG=deckTop+0.95*SV;
-    ln(x0+1.5*SV, yG+0.35*SV, x0+dw-1.5*SV, yG+0.35*SV, 1.3, '9 5');
-    ln(x0+1.5*SV, yG+0.62*SV, x0+dw-1.5*SV, yG+0.62*SV, 1.3, '9 5');
+    // girder: visible solid (3)2x10 band across the width; posts bear on its underside
+    rc(x0+1.0*SV, yG, dw-2.0*SV, 0.8*SV, 1.6);
+    ln(x0+1.0*SV, yG+0.27*SV, x0+dw-1.0*SV, yG+0.27*SV, 0.7, null, 0.6);
+    ln(x0+1.0*SV, yG+0.54*SV, x0+dw-1.0*SV, yG+0.54*SV, 0.7, null, 0.6);
     const per=c.perRow, run=Math.max(0.5,w-3);
     let px1st=0;
     for (let i2=0;i2<per;i2++){
       const px2=x0+(1.5+(per===1?0:i2*(run/(per-1))))*SV;
       if(i2===0)px1st=px2;
-      postAt(px2, yG);
+      postAt(px2, yG+0.8*SV);
     }
     const sp = c.tier2 ? null : stairPlace();
     let cutA=null, cutB=null;
@@ -1507,7 +1527,9 @@ function renderElevation(kind){
       loTop=GY-h2ft*SV;
       deckBand(lx0, lx0+lw, loTop);
       const yG2=loTop+0.95*SV, run2=Math.max(0.5,w2-3), per2=c.lo.perRow;
-      for (let i2=0;i2<per2;i2++){ postAt(lx0+(1.5+(per2===1?0:i2*(run2/(per2-1))))*SV, yG2); }
+      rc(lx0+1.0*SV, yG2, Math.max(2*SV, lw-2.0*SV), 0.8*SV, 1.6);
+      ln(lx0+1.0*SV, yG2+0.27*SV, lx0+lw-1.0*SV, yG2+0.27*SV, 0.7, null, 0.6);
+      for (let i2=0;i2<per2;i2++){ postAt(lx0+(1.5+(per2===1?0:i2*(run2/(per2-1))))*SV, yG2+0.8*SV); }
       let gA=null, gB=null;
       if (S.stairs && c.gsp && c.gsp.edge==='front'){
         gA = lx0+(c.gsp.c - c.gsp.sw/2 + S.w2/2)*SV; gB = gA + c.gsp.sw*SV;
