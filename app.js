@@ -303,8 +303,8 @@ function resolve(){
       const sxo = cx - sw/2 + 0.08 + s2*((sw-0.16)/(nStr-1));
       // notched stringer built honestly: a low sloped carriage that can never break the tread
       // plane, plus sawtooth step blocks carrying each tread down to the carriage
-      T.push({t:'stringer', sh:'box', lx:sxo, ly:yTop - drop/2 - 0.74, lz:z0 + dir*(runT/2 + 0.15),
-        dx:0.13, dy:0.5, dz:Math.max(1, slope - 0.3), rotX:ang, tier:tier, m:{dir:dir}});
+      T.push({t:'stringer', sh:'box', lx:sxo, ly:yTop - drop/2 - (rise + 0.4), lz:z0 + dir*(runT/2 + 0.15),
+        dx:0.13, dy:0.5, dz:Math.max(1, slope - 0.3), rotX:ang, tier:tier, m:{dir:dir, rise:rise, n:n}});
       for (let k=-1; k<n-1; k++){
         const tTop = yTop - rise*(k+1);
         T.push({t:'stringer', sh:'box', lx:sxo, ly:tTop - 0.12 - rise*0.45, lz:z0 + dir*(k+0.5)*runL,
@@ -1455,9 +1455,10 @@ function renderElevation(kind){
       ln(g1x,g1y,g2x,g2y,2.2);
       ln(g1x,g1y+0.5*SV,g2x,g2y+0.5*SV,1.2);
       const nb2=Math.max(3,Math.floor(Math.abs(g2x-g1x)/(0.38*SV)));
+      const nosY = function(bx){ const t3=(bx-x0s)/(dirR*risers*runp); return (topZ+rise) + (GY-(topZ+rise))*Math.max(0,Math.min(1,t3)); };
       for (let b3=1;b3<nb2;b3++){
         const bt=b3/nb2, bx2=g1x+(g2x-g1x)*bt, by1=g1y+(g2y-g1y)*bt+0.5*SV;
-        ln(bx2,by1,bx2,Math.min(by1+2.5*SV,GY),0.6,null,0.65);
+        ln(bx2,by1,bx2,Math.max(by1+4, nosY(bx2)-0.06*SV),0.6,null,0.65);
       }
       rc(g1x-0.14*SV,g1y,0.28*SV,topZ-g1y,1.3, null, '#F2EFE7');
       rc(g2x-0.14*SV,g2y,0.28*SV,GY-g2y,1.3, null, '#F2EFE7');
@@ -1584,7 +1585,7 @@ function renderElevation(kind){
       const wallW=18, wTop=Math.max(26, deckTop-3.6*SV);
       rc(faceX-wallW, wTop, wallW, GY-wTop, 1.4, null, null, true);
       for (let sy=wTop+10; sy<GY-6; sy+=11){ ln(faceX-wallW, sy, faceX, sy-5, 0.5, null, 0.3, true); }
-      ln(faceX, Math.max(20,wTop-8), faceX, GY, 2.2, null, null, true);
+      ln(faceX, wTop, faceX, GY, 2.2, null, null, true);
       rc(faceX, deckTop+2, 4, 0.83*SV, 1.6, null, '#0C0E11');
     }
     const dpx=S.d*SV;
@@ -1619,7 +1620,7 @@ function renderElevation(kind){
       const LX=B.x0-28, RX=Math.max(B.x1,endX)+30, BY=Math.max(B.y1,GY+30)+22;
       hdim(faceX, gx, BY, ftIn(S.d-1.5), null);
       hdim(gx, faceX+dpx, BY, "1'-6\"", null);
-      hdim(faceX, faceX+dpx, BY+26, S.d+"'-0\"", 'PROPOSED DECK');
+      hdim(faceX, faceX+dpx, BY+26, S.d+"'-0\"", null);
       vdim(RX, deckTop, GY, S.h+'"');
       if (S.rail) vdim(RX+30, deckTop-3.0*SV, deckTop, '36"');
       vdim(LX, GY, GY+30, '30"-36"');
