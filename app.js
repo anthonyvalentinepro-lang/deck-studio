@@ -298,7 +298,7 @@ function resolve(){
     for (let s2=0;s2<nStr;s2++){
       const sxo = cx - sw/2 + 0.08 + s2*((sw-0.16)/(nStr-1));
       T.push({t:'stringer', sh:'box', lx:sxo, ly:yTop - drop/2 - 0.42, lz:z0 + dir*runT/2,
-        dx:0.13, dy:0.62, dz:slope, rotX:-ang, tier:tier, m:{}});
+        dx:0.13, dy:0.62, dz:slope, rotX:ang, tier:tier, m:{dir:dir}});
     }
     for (let st=0; st<n; st++){
       T.push({t:'tread', sh:'box', lx:cx, ly:yTop - rise*(st+1) + rise/2, lz:z0 + dir*(runL/2 + st*runL),
@@ -1417,6 +1417,7 @@ function renderElevation(kind){
     footing(cx, 0.9*SV);
   };
   const stairProfile = function(x0s, topZ, risers, dirR, withRail){
+    dbgStair = 'profile';
     const rise = (topZ>=GY)?0:(GY-topZ)/risers, runp=(11/12)*SV;
     let px2=x0s, py2=topZ, path='M'+px2+' '+py2, ex2=px2;
     for (let r2=0;r2<risers;r2++){ py2 += rise; path += ' L'+ex2+' '+py2; ex2 += dirR*runp; path += ' L'+ex2+' '+py2; }
@@ -1439,11 +1440,26 @@ function renderElevation(kind){
     return ex2;
   };
   let SV;
+  let dbgStair = null;
+  // head-on stair: risers stacked between topY and botY across the opening — used when the
+  // flight descends toward/away from the viewer (front stairs in FRONT view, end stairs in SIDE view)
+  const frontalStair = function(sxL, swPx, topY, botY, risers, sono){
+    dbgStair = 'frontal';
+    const sxR = sxL + swPx;
+    ln(sxL, topY, sxL, botY, 1.6); ln(sxR, topY, sxR, botY, 1.6);
+    for (let r2=1; r2<risers; r2++){ const yy = topY + r2*((botY-topY)/risers); ln(sxL, yy, sxR, yy, 1); }
+    if (S.rail){
+      rc(sxL-0.14*SV, topY-3.0*SV, 0.28*SV, (botY-8)-(topY-3.0*SV), 1.3);
+      rc(sxR-0.14*SV, topY-3.0*SV, 0.28*SV, (botY-8)-(topY-3.0*SV), 1.3);
+    }
+    if (sono){ footing(sxL+0.35*SV, 0.7*SV); footing(sxR-0.35*SV, 0.7*SV); }
+  };
   // ================= FRONT =================
   if (kind==='front'){
     const w=S.w;
-    const spPre=stairPlace();
-    const stairProj=(S.stairs&&spPre)? (c.risers*(11/12)+1.2) : 0;
+    const spPre = c.tier2 ? c.gsp : stairPlace();
+    const projRisers = c.tier2 ? c.gradeRisers : c.risers;
+    const stairProj=(S.stairs&&spPre&&(spPre.edge==='left'||spPre.edge==='right'))? (projRisers*(11/12)+1.2) : 0;
     const projL=(S.stairs&&spPre&&spPre.edge==='left')? stairProj : 0;
     const ESTEPS=[24,20,16,12,9];
     const ewBud = MOB?360:600;
@@ -1462,12 +1478,27 @@ function renderElevation(kind){
       if(i2===0)px1st=px2;
       postAt(px2, yG);
     }
-    if (S.rail) railFront(x0, x0+dw, deckTop);
-    const sp=stairPlace();
-    if (S.stairs && sp){
-      const dirR=(sp.edge==='left')?-1:1;
-      const sx=(sp.edge==='front')? x0+(sp.c+w/2)*SV : (dirR>0? x0+dw : x0);
-      stairProfile(sx, deckTop, c.risers, dirR, true);
+    const sp = c.tier2 ? null : stairPlace();
+    let cutA=null, cutB=null;
+    if (!c.tier2 && S.stairs && sp && sp.edge==='front'){
+      cutA = x0+(sp.c-sp.sw/2+w/2)*SV; cutB = cutA + sp.sw*SV;
+    }
+    if (c.tier2 && c.tierRisers>0){
+      cutA = x0+(c.tg.tierC-c.tg.tierSw/2+w/2)*SV; cutB = cutA + c.tg.tierSw*SV;
+    }
+    if (S.rail){
+      if (cutA!==null){
+        if (cutA-x0>6) railFront(x0, cutA, deckTop);
+        if (x0+dw-cutB>6) railFront(cutB, x0+dw, deckTop);
+      } else railFront(x0, x0+dw, deckTop);
+    }
+    if (!c.tier2 && S.stairs && sp){
+      if (sp.edge==='front'){
+        frontalStair(cutA, cutB-cutA, deckTop, GY, c.risers, true);
+      } else {
+        const dirR=(sp.edge==='left')?-1:1;
+        stairProfile(dirR>0? x0+dw : x0, deckTop, c.risers, dirR, true);
+      }
     }
     let loTop=null, lx0=0, lw=0;
     if (c.tier2){
@@ -1477,7 +1508,25 @@ function renderElevation(kind){
       deckBand(lx0, lx0+lw, loTop);
       const yG2=loTop+0.95*SV, run2=Math.max(0.5,w2-3), per2=c.lo.perRow;
       for (let i2=0;i2<per2;i2++){ postAt(lx0+(1.5+(per2===1?0:i2*(run2/(per2-1))))*SV, yG2); }
-      if (S.rail) railFront(lx0, lx0+lw, loTop);
+      let gA=null, gB=null;
+      if (S.stairs && c.gsp && c.gsp.edge==='front'){
+        gA = lx0+(c.gsp.c - c.gsp.sw/2 + S.w2/2)*SV; gB = gA + c.gsp.sw*SV;
+      }
+      if (S.rail){
+        if (gA!==null){
+          if (gA-lx0>6) railFront(lx0, gA, loTop);
+          if (lx0+lw-gB>6) railFront(gB, lx0+lw, loTop);
+        } else railFront(lx0, lx0+lw, loTop);
+      }
+      if (c.tierRisers>0 && cutA!==null) frontalStair(cutA, cutB-cutA, deckTop, loTop, c.tierRisers, false);
+      if (S.stairs && c.gsp){
+        if (c.gsp.edge==='front'){
+          frontalStair(gA, gB-gA, loTop, GY, Math.max(2,c.gradeRisers), true);
+        } else {
+          const dirR=(c.gsp.edge==='left')?-1:1;
+          stairProfile(dirR>0? lx0+lw : lx0, loTop, Math.max(2,c.gradeRisers), dirR, true);
+        }
+      }
     }
     grade(B.x0-30, B.x1+30);
     // ---- dim lanes from measured bounds ----
@@ -1492,8 +1541,8 @@ function renderElevation(kind){
   } else {
   // ================= SIDE =================
     const dTot = S.tier2 ? (S.d+S.d2) : S.d;
-    const spS = stairPlace(S.tier2?S.w2:S.w, S.tier2?S.d2:S.d);
-    const stairFtP = S.stairs ? ((S.tier2? c.gradeRisers : c.risers)*(11/12)+1) : 0.5;
+    const spS = S.tier2 ? c.gsp : stairPlace();
+    const stairFtP = (S.stairs && spS && spS.edge==='front') ? ((S.tier2? c.gradeRisers : c.risers)*(11/12)+1) : 0.5;
     const SSTEPS=[26,21,17,13,10,8];
     const swBud=MOB?420:700;
     SV=SSTEPS[SSTEPS.length-1];
@@ -1519,10 +1568,23 @@ function renderElevation(kind){
     ln(gx-0.24*SV, yJb+0.56*SV, gx+0.24*SV, yJb+0.56*SV, 0.7, null, 0.7);
     postAt(gx, yJb+0.85*SV);
     if (!S.ledger){ const gx0=faceX+1.5*SV; rc(gx0-0.24*SV,yJb,0.48*SV,0.85*SV,1.8); postAt(gx0, yJb+0.85*SV); }
-    if (S.rail) railFront(faceX+(S.ledger?0.1*SV:0), faceX+dpx, deckTop);
+    let cutSA=null, cutSB=null;
+    if (!S.tier2 && S.stairs && spS && spS.edge!=='front'){
+      cutSA = faceX + (spS.c - spS.sw/2 + S.d/2)*SV; cutSB = cutSA + spS.sw*SV;
+    }
+    const railA = faceX+(S.ledger?0.1*SV:0);
+    if (!S.tier2 && S.rail){
+      if (cutSA!==null){
+        if (cutSA-railA>6) railFront(railA, cutSA, deckTop);
+        if (faceX+dpx-cutSB>6) railFront(cutSB, faceX+dpx, deckTop);
+      } else railFront(railA, faceX+dpx, deckTop);
+    }
     let endX=faceX+dpx;
     if (!S.tier2){
-      if (S.stairs) endX = stairProfile(faceX+dpx, deckTop, c.risers, 1, true);
+      if (S.stairs){
+        if (spS && spS.edge!=='front'){ frontalStair(cutSA, cutSB-cutSA, deckTop, GY, c.risers, true); }
+        else endX = stairProfile(faceX+dpx, deckTop, c.risers, 1, true);
+      }
       grade(Math.min(faceX-(S.ledger?18:0), B.x0)-26, Math.max(endX,B.x1)+28);
       const LX=B.x0-28, RX=Math.max(B.x1,endX)+30, BY=Math.max(B.y1,GY+30)+22;
       hdim(faceX, gx, BY, ftIn(S.d-1.5), null);
@@ -1547,8 +1609,22 @@ function renderElevation(kind){
         s += '<path d="'+path2+'" fill="none" stroke="#0C0E11" stroke-width="1.6"/>';
         upd(faceX+dpx, deckTop); upd(px3, loTop);
       }
-      if (S.rail){ railFront(faceX+(S.ledger?0.1*SV:0), faceX+dpx, deckTop); railFront(faceX+dpx+(c.tierRisers? c.tierRisers*(11/12)*SV:0), faceX+dpx+d2px, loTop); }
-      if (S.stairs) endX = stairProfile(faceX+dpx+d2px, loTop, Math.max(2,c.gradeRisers), 1, true);
+      if (S.rail){
+        railFront(faceX+(S.ledger?0.1*SV:0), faceX+dpx, deckTop);
+        const lrA = faceX+dpx+(c.tierRisers? c.tierRisers*(11/12)*SV:0), lrB = faceX+dpx+d2px;
+        if (S.stairs && c.gsp && c.gsp.edge!=='front'){
+          const gsA = faceX + dpx + (c.gsp.c - c.gsp.sw/2 + S.d2/2)*SV, gsB = gsA + c.gsp.sw*SV;
+          if (gsA-lrA>6) railFront(lrA, gsA, loTop);
+          if (lrB-gsB>6) railFront(gsB, lrB, loTop);
+        } else railFront(lrA, lrB, loTop);
+      }
+      if (S.stairs && c.gsp){
+        if (c.gsp.edge==='front'){ endX = stairProfile(faceX+dpx+d2px, loTop, Math.max(2,c.gradeRisers), 1, true); }
+        else {
+          const gsA = faceX + dpx + (c.gsp.c - c.gsp.sw/2 + S.d2/2)*SV;
+          frontalStair(gsA, c.gsp.sw*SV, loTop, GY, Math.max(2,c.gradeRisers), true);
+        }
+      }
       grade(Math.min(faceX-(S.ledger?18:0), B.x0)-26, Math.max(endX,B.x1)+28);
       const LX=B.x0-28, RX=Math.max(B.x1,endX)+30, BY=Math.max(B.y1,GY+30)+22;
       hdim(faceX, faceX+dpx, BY, S.d+"'-0\"", null);
@@ -1569,7 +1645,7 @@ function renderElevation(kind){
     s += '<line x1="64" y1="'+(H-13)+'" x2="'+(64+ttl.length*8.2+8)+'" y2="'+(H-13)+'" stroke="#0C0E11" stroke-width="1.4"/>';
     s += '<text x="'+(64+ttl.length*8.2+22)+'" y="'+(H-20)+'" font-family="IBM Plex Mono" font-size="8.5" fill="#0C0E11" opacity="0.8">PERMIT SET DRAWN AT 1/4" = 1\'-0"</text>';
   })();
-  try{ window.__dsDbg = {view:kind, bounds:{x0:B.x0,y0:B.y0,x1:B.x1,y1:B.y1}}; }catch(e){}
+  try{ window.__dsDbg = {view:kind, stair:dbgStair, bounds:{x0:B.x0,y0:B.y0,x1:B.x1,y1:B.y1}}; }catch(e){}
   document.getElementById('plan-wrap').innerHTML =
     '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet">' + s + '</svg>';
 }
