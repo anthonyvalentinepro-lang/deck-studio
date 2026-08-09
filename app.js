@@ -312,9 +312,8 @@ function resolve(){
       const sxo = cx - sw/2 + 0.08 + s2*((sw-0.16)/(nStr-1));
       // notched stringer built honestly: a low sloped carriage that can never break the tread
       // plane, plus sawtooth step blocks carrying each tread down to the carriage
-      const runC = Math.max(runL, (n-1)*runL), slopeC = Math.sqrt(runC*runC + drop*drop), angC = Math.atan2(drop, runC) * dir;
-      T.push({t:'stringer', sh:'box', lx:sxo, ly:yTop - drop/2 - (rise + 0.4), lz:z0 + dir*(runC/2),
-        dx:0.13, dy:0.5, dz:Math.max(1, slopeC), rotX:angC, tier:tier, m:{dir:dir, rise:rise, n:n}});
+      T.push({t:'stringer', sh:'box', lx:sxo, ly:yTop - drop/2 - (rise + 0.4), lz:z0 + dir*(runT/2 + 0.15),
+        dx:0.13, dy:0.5, dz:Math.max(1, slope - 0.3), rotX:ang, tier:tier, m:{dir:dir, rise:rise, n:n}});
       for (let k=-1; k<n-1; k++){
         const tTop = yTop - rise*(k+1);
         T.push({t:'stringer', sh:'box', lx:sxo, ly:tTop - 0.12 - rise*0.45, lz:z0 + dir*(k+0.5)*runL,
@@ -340,8 +339,9 @@ function resolve(){
         const nB = Math.max(2, Math.ceil(runT/0.32));
         for (let k=1;k<nB;k++){
           const bz = k*(runT/nB);
-          T.push({t:'baluster', sh:'box', lx:hx, ly:yTop - drop*(bz/runT) + 0.42 + 1.19, lz:z0 + dir*bz,
-            dx:0.08, dy:2.38, dz:0.08, tier:tier, m:{}});
+          const surfY = yTop - drop*(bz/runT);       // tread/nosing line at this run
+          T.push({t:'baluster', sh:'box', lx:hx, ly:surfY + 1.45, lz:z0 + dir*bz,
+            dx:0.08, dy:2.9, dz:0.08, tier:tier, m:{}});   // foot on the tread, ~35" to the rail
         }
       });
     }
@@ -360,8 +360,8 @@ function resolve(){
     T.push({t:'stairhdr', sh:'box', lx:0, ly:hft-0.36, lz:-0.24, dx:sw+0.5, dy:0.62, dz:0.13, tier:tier, m:{plies:2}});
     if (!swb){
       flight(tier, T, risers, rise, sw, hft, 0, 0, 1, ron);
-      const footZ = (risers-1)*runL;   // directly under the bottom step / stringer foot
-      T.push({t:'stringer', sh:'box', lx:0, ly:0.14, lz:footZ, dx:sw, dy:0.16, dz:0.5, tier:tier, m:{kicker:true}});
+      const footZ = risers*runL - 0.35;   // under the stringer toe where it lands at grade
+      T.push({t:'stringer', sh:'box', lx:0, ly:0.3, lz:footZ, dx:sw, dy:0.14, dz:0.4, tier:tier, m:{kicker:true}});
       [-(sw/2-0.45), sw/2-0.45].forEach(function(fx){
         const sd = (risers > 10 || sw >= 5) ? 10 : 8;
         T.push({t:'footing', sh:'cyl', lx:fx, ly:0.11, lz:footZ, r:sd/24, len:0.22, tier:tier, m:{dia:sd, kind:'sono'}});
@@ -410,8 +410,8 @@ function resolve(){
       }
       // return flight beside the first, descending back toward the deck face
       flight(tier, T, n2, rise, sw, yLand, ex*sw, len1, -1, ron);
-      const footZ2 = len1 - (n2-1)*runL;   // under the return flight's bottom step
-      T.push({t:'stringer', sh:'box', lx:ex*sw, ly:0.14, lz:footZ2, dx:sw, dy:0.16, dz:0.5, tier:tier, m:{kicker:true}});
+      const footZ2 = len1 - n2*runL + 0.35;   // under the return flight's stringer toe
+      T.push({t:'stringer', sh:'box', lx:ex*sw, ly:0.3, lz:footZ2, dx:sw, dy:0.14, dz:0.4, tier:tier, m:{kicker:true}});
       [ex*sw - (sw/2-0.45), ex*sw + (sw/2-0.45)].forEach(function(fx){
         const sd2 = (n2 > 10 || sw >= 5) ? 10 : 8;
         T.push({t:'footing', sh:'cyl', lx:fx, ly:0.11, lz:footZ2, r:sd2/24, len:0.22, tier:tier, m:{dia:sd2, kind:'sono'}});
