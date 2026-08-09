@@ -1065,28 +1065,29 @@ function renderPlan(){
   // railing: inset guard line on railed edges, broken at the stair (deck plan mode)
   if (MODE==='decking' && S.rail){
     const ro = 5;
-    // railing per drafting standard: double rail line with hollow post squares <= 6'-0" OC
-    const psq2 = Math.max(4, 0.46*sc), rw = Math.max(2.2, 0.25*sc);
+    // railing per drafting standard: double rail line CENTERED on hollow post squares <= 6'-0" OC
+    const psq2 = Math.max(4, 0.46*sc), rw = Math.max(2.2, 0.22*sc);
+    const _postCells = {};   // dedupe so shared corners get exactly ONE post
+    const placePost = function(cx, cy){
+      const key = Math.round(cx/2)+'_'+Math.round(cy/2);
+      if (_postCells[key]) return; _postCells[key] = 1;
+      s += '<rect x="'+(cx-psq2/2)+'" y="'+(cy-psq2/2)+'" width="'+psq2+'" height="'+psq2+'" fill="#F2EFE7" stroke="#0C0E11" stroke-width="1.2"/>';
+    };
     const rseg = function(x1,y1,x2,y2){
       const vert = Math.abs(x2-x1) < 0.5;
       const len = vert ? (y2-y1) : (x2-x1); if (len < 3) return;
       if (vert){
-        const off = (x1 < x0+dw/2) ? 1 : -1;
-        s += '<line x1="'+x1+'" y1="'+y1+'" x2="'+x1+'" y2="'+y2+'" stroke="#0C0E11" stroke-width="1.1" opacity="0.85"/>';
-        s += '<line x1="'+(x1+off*rw)+'" y1="'+y1+'" x2="'+(x1+off*rw)+'" y2="'+y2+'" stroke="#0C0E11" stroke-width="0.8" opacity="0.85"/>';
+        // rail pair straddles the post centreline x1 (rail centered on post)
+        s += '<line x1="'+(x1-rw/2)+'" y1="'+y1+'" x2="'+(x1-rw/2)+'" y2="'+y2+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
+        s += '<line x1="'+(x1+rw/2)+'" y1="'+y1+'" x2="'+(x1+rw/2)+'" y2="'+y2+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
       } else {
-        const off = (y1 < y0+dd/2) ? 1 : -1;
-        s += '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y1+'" stroke="#0C0E11" stroke-width="1.1" opacity="0.85"/>';
-        s += '<line x1="'+x1+'" y1="'+(y1+off*rw)+'" x2="'+x2+'" y2="'+(y1+off*rw)+'" stroke="#0C0E11" stroke-width="0.8" opacity="0.85"/>';
+        s += '<line x1="'+x1+'" y1="'+(y1-rw/2)+'" x2="'+x2+'" y2="'+(y1-rw/2)+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
+        s += '<line x1="'+x1+'" y1="'+(y1+rw/2)+'" x2="'+x2+'" y2="'+(y1+rw/2)+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
       }
       const nP2 = Math.max(2, Math.ceil(Math.abs(len)/(6*sc))+1);
       for (let p3=0;p3<nP2;p3++){
-        let t4 = p3/(nP2-1);
-        const cx4 = vert ? x1 : (x1 + t4*len);
-        const cy4 = vert ? (y1 + t4*len) : y1;
-        const px4 = Math.min(Math.max(cx4, x0+ro+psq2/2), x0+dw-ro-psq2/2);
-        const py4 = Math.min(Math.max(cy4, y0+ro+psq2/2), y0+dd-ro-psq2/2);
-        s += '<rect x="'+((vert?px4:cx4)-psq2/2)+'" y="'+((vert?cy4:py4)-psq2/2)+'" width="'+psq2+'" height="'+psq2+'" fill="#F2EFE7" stroke="#0C0E11" stroke-width="1.2"/>';
+        const t4 = p3/(nP2-1);
+        placePost(vert ? x1 : (x1 + t4*len), vert ? (y1 + t4*len) : y1);
       }
     };
     const cutE = planSp ? planSp.edge : null;
@@ -1388,26 +1389,27 @@ function renderPlanTier2(c, W, H, m, availW, availH){
   // railing: inset guard lines; upper cut at the tier stair, lower cut at the grade stair (deck plan)
   if (MODE==='decking' && S.rail){
     const ro = 5;
-    const midX2 = (X(-w/2)+X(w/2))/2, midY2 = (Y(-d/2)+Y(d/2+d2))/2;
-    const psq3 = Math.max(4, 0.46*sc), rw3 = Math.max(2.2, 0.25*sc);
+    const psq3 = Math.max(4, 0.46*sc), rw3 = Math.max(2.2, 0.22*sc);
+    const _pc2 = {};
+    const placePost3 = function(cx, cy){
+      const key = Math.round(cx/2)+'_'+Math.round(cy/2);
+      if (_pc2[key]) return; _pc2[key] = 1;
+      s += '<rect x="'+(cx-psq3/2)+'" y="'+(cy-psq3/2)+'" width="'+psq3+'" height="'+psq3+'" fill="#F2EFE7" stroke="#0C0E11" stroke-width="1.2"/>';
+    };
     const rseg = function(x1,y1,x2,y2){
       const vert = Math.abs(x2-x1) < 0.5;
       const len = vert ? (y2-y1) : (x2-x1); if (len < 3) return;
       if (vert){
-        const off = (x1 < midX2) ? 1 : -1;
-        s += '<line x1="'+x1+'" y1="'+y1+'" x2="'+x1+'" y2="'+y2+'" stroke="#0C0E11" stroke-width="1.1" opacity="0.85"/>';
-        s += '<line x1="'+(x1+off*rw3)+'" y1="'+y1+'" x2="'+(x1+off*rw3)+'" y2="'+y2+'" stroke="#0C0E11" stroke-width="0.8" opacity="0.85"/>';
+        s += '<line x1="'+(x1-rw3/2)+'" y1="'+y1+'" x2="'+(x1-rw3/2)+'" y2="'+y2+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
+        s += '<line x1="'+(x1+rw3/2)+'" y1="'+y1+'" x2="'+(x1+rw3/2)+'" y2="'+y2+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
       } else {
-        const off = (y1 < midY2) ? 1 : -1;
-        s += '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y1+'" stroke="#0C0E11" stroke-width="1.1" opacity="0.85"/>';
-        s += '<line x1="'+x1+'" y1="'+(y1+off*rw3)+'" x2="'+x2+'" y2="'+(y1+off*rw3)+'" stroke="#0C0E11" stroke-width="0.8" opacity="0.85"/>';
+        s += '<line x1="'+x1+'" y1="'+(y1-rw3/2)+'" x2="'+x2+'" y2="'+(y1-rw3/2)+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
+        s += '<line x1="'+x1+'" y1="'+(y1+rw3/2)+'" x2="'+x2+'" y2="'+(y1+rw3/2)+'" stroke="#0C0E11" stroke-width="1" opacity="0.85"/>';
       }
       const nP3 = Math.max(2, Math.ceil(Math.abs(len)/(6*sc))+1);
       for (let p4=0;p4<nP3;p4++){
         const t5 = p4/(nP3-1);
-        let cx5 = vert ? x1 : (x1 + t5*len + (p4===0? psq3/2 : (p4===nP3-1? -psq3/2 : 0)));
-        let cy5 = vert ? (y1 + t5*len + (p4===0? psq3/2 : (p4===nP3-1? -psq3/2 : 0))) : y1;
-        s += '<rect x="'+(cx5-psq3/2)+'" y="'+(cy5-psq3/2)+'" width="'+psq3+'" height="'+psq3+'" fill="#F2EFE7" stroke="#0C0E11" stroke-width="1.2"/>';
+        placePost3(vert ? x1 : (x1 + t5*len), vert ? (y1 + t5*len) : y1);
       }
     };
     // upper rect
@@ -1613,7 +1615,8 @@ function renderElevation(kind){
     if (risers <= 12){
       dbgStair = 'profile';
       const ex2 = profileFlight(x0s, topZ, GY, risers, dirR, withRail);
-      footing(ex2 - dirR*0.35*SV, 0.7*SV);
+      const runp0=(11/12)*SV;
+      footing(x0s + dirR*Math.max(1,(risers-1.5))*runp0, 0.7*SV);   // under the stringer foot / bottom newel
       return ex2;
     }
     // switchback: flight 1 out to a mid landing, return flight comes back UNDER flight 1
