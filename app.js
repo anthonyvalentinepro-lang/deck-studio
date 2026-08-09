@@ -1549,7 +1549,7 @@ function renderElevation(kind){
       const capH=Math.max(2.5,0.16*SV), subH=Math.max(2,0.11*SV);
       const nTx = x0s;                                // rails die into the deck guard's corner post
       const nBx = x0s + dirR*Math.max(1,(n-1.5))*runp; // bottom newel stands ON the bottom tread
-      const newelBase = Math.min(botY, topY + rise*(n-1)); // that tread's surface
+      const newelBase = Math.min(botY, topY + rise*(n-1)) - tth; // on the tread BOARD top
       const g1y = topY - 3.0*SV, g2y = topY + Math.max(0.5,(n-1.5))*rise - 3.0*SV;
       const poly=function(xa,ya,xb,yb,h){
         s += '<path d="M'+xa+' '+ya+' L'+xb+' '+yb+' L'+xb+' '+(yb+h)+' L'+xa+' '+(ya+h)+' Z" fill="#F2EFE7" stroke="#0C0E11" stroke-width="1.1"/>';
@@ -1776,8 +1776,11 @@ function renderElevation(kind){
       for (let sy=wTop+10; sy<GY-6; sy+=11){ ln(faceX-wallW, sy, faceX, sy-5, 0.5, null, 0.3, true); }
       ln(faceX, wTop, faceX, GY, 2.2, null, null, true);
       // the dwelling continues above: mask the top edge and draw a break line
-      s += '<rect x="'+(faceX-wallW-3)+'" y="'+(wTop-2.5)+'" width="'+(wallW+6)+'" height="5" fill="#F2EFE7"/>';
-      s += '<path d="M'+(faceX-wallW-3)+' '+wTop+' l4 -4 l5 8 l5 -8 l5 8 l4 -4" fill="none" stroke="#0C0E11" stroke-width="1.2"/>';
+      s += '<rect x="'+(faceX-wallW-3)+'" y="'+(wTop-2.5)+'" width="'+(wallW+6)+'" height="6" fill="#F2EFE7"/>';
+      (function(){
+        const bx0=faceX-wallW-4, bx1=faceX+4, bm=(bx0+bx1)/2;
+        s += '<path d="M'+bx0+' '+wTop+' L'+(bm-5)+' '+wTop+' l3.5 -5 l3 10 l3.5 -5 L'+bx1+' '+wTop+'" fill="none" stroke="#0C0E11" stroke-width="1.2"/>';
+      })();
       rc(faceX, deckTop+2, 4, 0.83*SV, 1.6, null, '#0C0E11');
     }
     const dpx=S.d*SV;
