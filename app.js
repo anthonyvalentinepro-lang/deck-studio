@@ -1536,32 +1536,35 @@ function renderElevation(kind){
     upd(x0s, topY); upd(ex2, botY);
     ln(x0s, topY+1.5*rise, x0s + dirR*(n-1.5)*runp, botY, 1.2, null, 0.85);
     if (withRail && S.rail){
-      const g1x=x0s+0.12*SV*dirR, g1y=topY-3.0*SV, g2x=ex2-runp*dirR*0.5, g2y=botY-3.0*SV+6;
-      const capH=Math.max(2.5,0.16*SV), subH=Math.max(2,0.11*SV), botH=Math.max(2,0.12*SV);
-      const railBotOff = 3.0*SV-0.35*SV-botH;
+      // per code diagram: rail runs newel-to-newel parallel to the pitch; balusters land on the treads
+      const hp2=Math.max(2.2,0.17*SV);
+      const capH=Math.max(2.5,0.16*SV), subH=Math.max(2,0.11*SV);
+      const nTx = x0s + dirR*0.14*SV;                 // top newel face (at the deck corner post)
+      const nBx = ex2 - dirR*0.14*SV;                 // bottom newel at the flight base
+      const g1y = topY - 3.0*SV, g2y = botY - 3.0*SV;
       const poly=function(xa,ya,xb,yb,h){
         s += '<path d="M'+xa+' '+ya+' L'+xb+' '+yb+' L'+xb+' '+(yb+h)+' L'+xa+' '+(ya+h)+' Z" fill="#F2EFE7" stroke="#0C0E11" stroke-width="1.1"/>';
         upd(xa,ya); upd(xb,yb+h);
       };
-      // same rail build as the deck guard, following the slope
-      poly(g1x,g1y,g2x,g2y,capH);
-      poly(g1x,g1y+capH,g2x,g2y+capH,subH);
-      poly(g1x,g1y+railBotOff,g2x,g2y+railBotOff,botH);
-      // plumb flat balusters between sub-rail and bottom rail
+      // sloped cap + sub-rail, post face to post face
+      poly(nTx, g1y, nBx, g2y, capH);
+      poly(nTx, g1y+capH, nBx, g2y+capH, subH);
+      // plumb balusters from the sub-rail down onto the treads
+      const nosY = function(bx){ const t3=(bx-x0s)/(dirR*n*runp); return (topY+rise) + (botY-(topY+rise))*Math.max(0,Math.min(1,t3)); };
       const bw2=Math.max(1.6,0.12*SV), pitch2=Math.max(bw2*2.1,0.34*SV);
-      const span2=Math.abs(g2x-g1x), nB3=Math.floor(span2/pitch2);
+      const span2=Math.abs(nBx-nTx), nB3=Math.floor(span2/pitch2);
       for (let b3=1;b3<nB3;b3++){
-        const bt=b3/nB3, bx2=g1x+(g2x-g1x)*bt;
-        const yTopB=g1y+(g2y-g1y)*bt+capH+subH, yBotB=g1y+(g2y-g1y)*bt+railBotOff;
-        rc(bx2-bw2/2, yTopB, bw2, yBotB-yTopB, 0.9, null, '#F2EFE7');
+        const bt=b3/nB3, bx2=nTx+(nBx-nTx)*bt;
+        const yTopB=g1y+(g2y-g1y)*bt+capH+subH;
+        const yBotB=Math.min(nosY(bx2)-0.03*SV, botY-1);
+        if (yBotB - yTopB > 2) rc(bx2-bw2/2, yTopB, bw2, yBotB-yTopB, 0.9, null, '#F2EFE7');
       }
-      // end posts with layered caps + base collars (deck-guard design)
-      [[g1x, topY],[g2x, botY]].forEach(function(pp){
-        const hp2=Math.max(2.2,0.17*SV), py=pp[0]===g1x? g1y : g2y;
-        rc(pp[0]-hp2, py-3, 2*hp2, pp[1]-(py-3), 1.3, null, '#F2EFE7');
-        rc(pp[0]-hp2-0.045*SV, py-6, 2*hp2+0.09*SV, 3.2, 1.2, null, '#F2EFE7');
-        rc(pp[0]-hp2-0.075*SV, py-9, 2*hp2+0.15*SV, 3.2, 1.2, null, '#F2EFE7');
-        rc(pp[0]-hp2-0.055*SV, pp[1]-Math.max(3,0.22*SV), 2*hp2+0.11*SV, Math.max(3,0.22*SV), 1.2, null, '#F2EFE7');
+      // newels: top one rides the deck corner post; bottom one is full height off the grade
+      [[nTx, g1y, topY+0.2*SV],[nBx, g2y, botY]].forEach(function(pp){
+        rc(pp[0]-hp2, pp[1]-3, 2*hp2, pp[2]-(pp[1]-3), 1.3, null, '#F2EFE7');
+        rc(pp[0]-hp2-0.045*SV, pp[1]-6, 2*hp2+0.09*SV, 3.2, 1.2, null, '#F2EFE7');
+        rc(pp[0]-hp2-0.075*SV, pp[1]-9, 2*hp2+0.15*SV, 3.2, 1.2, null, '#F2EFE7');
+        rc(pp[0]-hp2-0.055*SV, pp[2]-Math.max(3,0.22*SV), 2*hp2+0.11*SV, Math.max(3,0.22*SV), 1.2, null, '#F2EFE7');
       });
     }
     return ex2;
