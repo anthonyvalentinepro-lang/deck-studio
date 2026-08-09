@@ -1461,37 +1461,97 @@ function renderElevation(kind){
     rc(cx-0.23*SV, yTopP, 0.46*SV, GY-yTopP, 1.6);
     footing(cx, 0.9*SV);
   };
-  const stairProfile = function(x0s, topZ, risers, dirR, withRail){
-    dbgStair = 'profile';
-    const rise = (topZ>=GY)?0:(GY-topZ)/risers, runp=(11/12)*SV;
-    let px2=x0s, py2=topZ, path='M'+px2+' '+py2, ex2=px2;
-    for (let r2=0;r2<risers;r2++){ py2 += rise; path += ' L'+ex2+' '+py2; ex2 += dirR*runp; path += ' L'+ex2+' '+py2; }
+  const profileFlight = function(x0s, topY, botY, n, dirR, withRail){
+    const rise = (botY-topY)/n, runp=(11/12)*SV;
+    let px2=x0s, py2=topY, path='M'+px2+' '+py2, ex2=px2;
+    for (let r2=0;r2<n;r2++){ py2 += rise; path += ' L'+ex2+' '+py2; ex2 += dirR*runp; path += ' L'+ex2+' '+py2; }
     s += '<path d="'+path+'" fill="none" stroke="#0C0E11" stroke-width="1.6"/>';
-    upd(x0s, topZ); upd(ex2, GY);
-    ln(x0s, topZ+1.5*rise, x0s + dirR*(risers-1.5)*runp, GY, 1.2, null, 0.85);
-    footing(x0s + dirR*(risers*runp)/2, 0.7*SV);
+    upd(x0s, topY); upd(ex2, botY);
+    ln(x0s, topY+1.5*rise, x0s + dirR*(n-1.5)*runp, botY, 1.2, null, 0.85);
     if (withRail && S.rail){
-      const g1x=x0s+0.12*SV*dirR, g1y=topZ-3.0*SV, g2x=ex2-runp*dirR*0.5, g2y=GY-3.0*SV+6;
+      const g1x=x0s+0.12*SV*dirR, g1y=topY-3.0*SV, g2x=ex2-runp*dirR*0.5, g2y=botY-3.0*SV+6;
       ln(g1x,g1y,g2x,g2y,2.2);
       ln(g1x,g1y+0.5*SV,g2x,g2y+0.5*SV,1.2);
       const nb2=Math.max(3,Math.floor(Math.abs(g2x-g1x)/(0.38*SV)));
-      const nosY = function(bx){ const t3=(bx-x0s)/(dirR*risers*runp); return (topZ+rise) + (GY-(topZ+rise))*Math.max(0,Math.min(1,t3)); };
+      const nosY = function(bx){ const t3=(bx-x0s)/(dirR*n*runp); return (topY+rise) + (botY-(topY+rise))*Math.max(0,Math.min(1,t3)); };
       for (let b3=1;b3<nb2;b3++){
         const bt=b3/nb2, bx2=g1x+(g2x-g1x)*bt, by1=g1y+(g2y-g1y)*bt+0.5*SV;
         ln(bx2,by1,bx2,Math.max(by1+4, nosY(bx2)-0.06*SV),0.6,null,0.65);
       }
-      rc(g1x-0.14*SV,g1y,0.28*SV,topZ-g1y,1.3, null, '#F2EFE7');
-      rc(g2x-0.14*SV,g2y,0.28*SV,GY-g2y,1.3, null, '#F2EFE7');
+      rc(g1x-0.14*SV,g1y,0.28*SV,topY-g1y,1.3, null, '#F2EFE7');
+      rc(g2x-0.14*SV,g2y,0.28*SV,botY-g2y,1.3, null, '#F2EFE7');
     }
     return ex2;
+  };
+  const stairProfile = function(x0s, topZ, risers, dirR, withRail){
+    if (risers <= 12){
+      dbgStair = 'profile';
+      const ex2 = profileFlight(x0s, topZ, GY, risers, dirR, withRail);
+      footing(x0s + dirR*(risers*(11/12)*SV)/2, 0.7*SV);
+      return ex2;
+    }
+    // switchback: flight 1 out to a mid landing, return flight comes back UNDER flight 1
+    dbgStair = 'profile-swb';
+    const n1 = Math.ceil(risers/2), n2 = risers - n1;
+    const rise = (GY-topZ)/risers, runp=(11/12)*SV;
+    const Ld = Math.max(3, S.stairW)*SV;
+    const yL = topZ + n1*rise;
+    const x1 = profileFlight(x0s, topZ, yL, n1, dirR, withRail);
+    // landing platform on posts with sonotube pads
+    const lx1 = Math.min(x1, x1+dirR*Ld), lw2 = Ld;
+    rc(lx1, yL, lw2, 0.3*SV, 1.5, null, '#F2EFE7');
+    [x1 + dirR*0.18*SV, x1 + dirR*(Ld-0.18*SV)].forEach(function(px3){
+      rc(px3-0.13*SV, yL+0.3*SV, 0.26*SV, GY-(yL+0.3*SV), 1.4, null, '#F2EFE7');
+      footing(px3, 0.66*SV);
+    });
+    if (S.rail){
+      // landing guard: horizontal rail 36" above the landing
+      ln(lx1, yL-3.0*SV, lx1+lw2, yL-3.0*SV, 2.2);
+      ln(lx1, yL-3.0*SV+0.5*SV, lx1+lw2, yL-3.0*SV+0.5*SV, 1.2);
+      for (let bx3=lx1+0.3*SV; bx3<lx1+lw2; bx3+=0.38*SV){ ln(bx3, yL-3.0*SV+0.5*SV, bx3, yL-0.05*SV, 0.6, null, 0.65); }
+    }
+    // return flight descends back toward the deck, beneath flight 1
+    const ex3 = profileFlight(x1, yL, GY, n2, -dirR, withRail);
+    footing(x1 - dirR*(n2*runp)/2, 0.7*SV);
+    return Math.max(x1+dirR*Ld, ex3, x0s) ;
   };
   let SV;
   let dbgStair = null;
   // head-on stair: risers stacked between topY and botY across the opening — used when the
   // flight descends toward/away from the viewer (front stairs in FRONT view, end stairs in SIDE view)
   const frontalStair = function(sxL, swPx, topY, botY, risers, sono){
-    dbgStair = 'frontal';
     const sxR = sxL + swPx;
+    if (risers > 12 && botY === GY){
+      // switchback head-on: two riser columns side by side, landing band between levels
+      dbgStair = 'frontal-swb';
+      const n1 = Math.ceil(risers/2), n2 = risers - n1;
+      const rise = (botY-topY)/risers, yL = topY + n1*rise;
+      const sx2R = sxR + swPx;
+      s += '<rect x="'+sxL+'" y="'+topY+'" width="'+swPx+'" height="'+(botY-topY)+'" fill="#F2EFE7"/>';
+      s += '<rect x="'+sxR+'" y="'+(yL-0.28*SV)+'" width="'+swPx+'" height="'+(botY-(yL-0.28*SV))+'" fill="#F2EFE7"/>';
+      upd(sxL, topY); upd(sx2R, botY);
+      // column 1: deck down to the landing
+      ln(sxL, topY, sxR, topY, 1.6);
+      ln(sxL, topY, sxL, botY, 1.6); ln(sxR, topY, sxR, yL-0.28*SV, 1.6);
+      for (let r2=1; r2<=n1; r2++){ const yy = topY + r2*rise; if (yy < yL-1) ln(sxL, yy, sxR, yy, 1); }
+      // landing band across both columns
+      rc(sxL, yL-0.28*SV, 2*swPx, 0.28*SV, 1.5, null, '#F2EFE7');
+      // column 2: landing down to grade
+      ln(sxR, yL, sx2R, yL, 1.6);
+      ln(sx2R, yL-0.28*SV, sx2R, botY, 1.6);
+      for (let r2=1; r2<n2; r2++){ const yy = yL + r2*((botY-yL)/n2); ln(sxR, yy, sx2R, yy, 1); }
+      ln(sxL, botY, sx2R, botY, 1, null, 0.001);
+      if (S.rail){
+        rc(sxL-0.14*SV, topY-3.0*SV, 0.28*SV, (botY-8)-(topY-3.0*SV), 1.3, null, '#F2EFE7');
+        rc(sx2R-0.14*SV, yL-3.0*SV, 0.28*SV, (botY-8)-(yL-3.0*SV), 1.3, null, '#F2EFE7');
+      }
+      if (sono){
+        footing(sxL+0.35*SV, 0.7*SV); footing(sxR-0.35*SV, 0.7*SV);
+        footing(sxR+0.35*SV, 0.66*SV); footing(sx2R-0.35*SV, 0.66*SV);
+      }
+      return;
+    }
+    dbgStair = 'frontal';
     // the flight is nearer the viewer than the deck: it occludes the structure behind it
     s += '<rect x="'+sxL+'" y="'+topY+'" width="'+swPx+'" height="'+(botY-topY)+'" fill="#F2EFE7"/>';
     upd(sxL, topY); upd(sxR, botY);
@@ -1509,7 +1569,8 @@ function renderElevation(kind){
     const w=S.w;
     const spPre = c.tier2 ? c.gsp : stairPlace();
     const projRisers = c.tier2 ? c.gradeRisers : c.risers;
-    const stairProj=(S.stairs&&spPre&&(spPre.edge==='left'||spPre.edge==='right'))? (projRisers*(11/12)+1.2) : 0;
+    const projSwb = projRisers > 12;
+    const stairProj=(S.stairs&&spPre&&(spPre.edge==='left'||spPre.edge==='right'))? (projSwb ? (Math.ceil(projRisers/2)*(11/12) + Math.max(3,S.stairW) + 1.2) : (projRisers*(11/12)+1.2)) : 0;
     const projL=(S.stairs&&spPre&&spPre.edge==='left')? stairProj : 0;
     const ESTEPS=[24,20,16,12,9];
     const ewBud = MOB?360:600;
@@ -1593,7 +1654,10 @@ function renderElevation(kind){
   // ================= SIDE =================
     const dTot = S.tier2 ? (S.d+S.d2) : S.d;
     const spS = S.tier2 ? c.gsp : stairPlace();
-    const stairFtP = (S.stairs && spS && spS.edge==='front') ? ((S.tier2? c.gradeRisers : c.risers)*(11/12)+1) : 0.5;
+    const sideRisers = S.tier2 ? c.gradeRisers : c.risers;
+    const stairFtP = (S.stairs && spS && spS.edge==='front')
+      ? (sideRisers > 12 ? (Math.ceil(sideRisers/2)*(11/12) + Math.max(3,S.stairW) + 1.2) : (sideRisers*(11/12)+1))
+      : 0.5;
     const SSTEPS=[26,21,17,13,10,8];
     const swBud=MOB?420:700;
     SV=SSTEPS[SSTEPS.length-1];
