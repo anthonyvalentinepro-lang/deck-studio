@@ -844,6 +844,22 @@ function sizeStage(){
 window.addEventListener('resize', sizeStage);
 function loop(){ requestAnimationFrame(loop); renderer.render(scene,camera); }
 
+// center the drawing group (dims included) within the sheet, leaving the title strip alone;
+// measured from the real rendered bbox so every view centers itself regardless of config
+function centerViewG(W2, H2, bandTop, bandBot){
+  try{
+    const svg = document.querySelector('#plan-wrap svg');
+    const g = svg && svg.querySelector('#ds-vg');
+    if (!g || !g.getBBox) return;
+    const bb = g.getBBox();
+    if (!bb || !isFinite(bb.width) || bb.width<=0) return;
+    let dx = (W2 - bb.width)/2 - bb.x;
+    let dy = bandTop + ((bandBot - bandTop) - bb.height)/2 - bb.y;
+    if (bb.width > W2 - 12) dx = 6 - bb.x;
+    if (bb.height > (bandBot - bandTop)) dy = bandTop - bb.y;
+    g.setAttribute('transform', 'translate('+dx.toFixed(1)+' '+dy.toFixed(1)+')');
+  }catch(e){}
+}
 // ---------- 2D PLAN (SVG) ----------
 function renderPlan(){
   const c = calc();
@@ -1106,6 +1122,7 @@ function renderPlan(){
     }
   })();
 
+  s = '<g id="ds-vg">' + s + '</g>';
   // note
   (function(){
     const num = (MODE==='decking') ? '2' : '1';
@@ -1121,6 +1138,7 @@ function renderPlan(){
     '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet">'
     + '<defs><pattern id="hatch" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse"><line x1="0" y1="0" x2="0" y2="8" stroke="#0C0E11" stroke-width="1.4"/></pattern></defs>'
     + s + '</svg>';
+  centerViewG(W, H, 16, H-52);
 }
 
 // two tier framing plan: both rectangles, shared row marked, tier stair between, grade stair off the lower
@@ -1356,6 +1374,7 @@ function renderPlanTier2(c, W, H, m, availW, availH){
   dim(X(-w/2), Y(-d/2), X(-w/2), Y(d/2), d+"'-0\"", offLU, true);
   const offRL = 34 + ((gsp && gsp.edge==='right') ? planSl + 12 : 0);
   dim(X(tg.cx2+w2/2), Y(d/2), X(tg.cx2+w2/2), Y(d/2+d2), d2+"'-0\"", offRL, true);
+  s = '<g id="ds-vg">' + s + '</g>';
   // notes
   (function(){
     const num = (MODE==='decking') ? '2' : '1';
@@ -1371,6 +1390,7 @@ function renderPlanTier2(c, W, H, m, availW, availH){
     '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet">'
     + '<defs><pattern id="hatch" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse"><line x1="0" y1="0" x2="0" y2="8" stroke="#0C0E11" stroke-width="1.4"/></pattern></defs>'
     + s + '</svg>';
+  centerViewG(W, H, 16, H-52);
 }
 
 
@@ -1665,6 +1685,7 @@ function renderElevation(kind){
       vdim(LX, GY, GY+30, '30"-36"');
     }
   }
+  s = '<g id="ds-vg">' + s + '</g>';
   // ---- stamp + view title (fixed corners, outside lanes) ----
   s += '<text x="'+(W-20)+'" y="24" text-anchor="end" font-family="IBM Plex Mono" font-weight="600" font-size="8.5" fill="#FF5A1F">PRELIMINARY / NOT FOR CONSTRUCTION</text>';
   (function(){
@@ -1679,6 +1700,7 @@ function renderElevation(kind){
   try{ window.__dsDbg = {view:kind, stair:dbgStair, bounds:{x0:B.x0,y0:B.y0,x1:B.x1,y1:B.y1}}; }catch(e){}
   document.getElementById('plan-wrap').innerHTML =
     '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet">' + s + '</svg>';
+  centerViewG(W, H, 34, H-46);
 }
 
 // ---------- wiring ----------
