@@ -1535,6 +1535,14 @@ function renderElevation(kind){
     s += '<path d="'+path+'" fill="none" stroke="#0C0E11" stroke-width="1.6"/>';
     upd(x0s, topY); upd(ex2, botY);
     ln(x0s, topY+1.5*rise, x0s + dirR*(n-1.5)*runp, botY, 1.2, null, 0.85);
+    // tread boards: thickness + nose overhang so each step reads
+    const tth = Math.max(2, 0.10*SV), nose = 0.06*SV;
+    for (let r2=0;r2<n;r2++){
+      const ty = topY + rise*(r2+1);
+      const faceX2 = x0s + dirR*(r2*runp);
+      const xA = Math.min(faceX2 - dirR*nose, faceX2 + dirR*runp);
+      rc(xA, ty - tth, runp + nose, tth, 1.1, null, '#F2EFE7');
+    }
     if (withRail && S.rail){
       // per code diagram: rail runs newel-to-newel parallel to the pitch; balusters land on the treads
       const hp2=Math.max(2.2,0.17*SV);
@@ -1576,7 +1584,7 @@ function renderElevation(kind){
     if (risers <= 12){
       dbgStair = 'profile';
       const ex2 = profileFlight(x0s, topZ, GY, risers, dirR, withRail);
-      footing(x0s + dirR*(risers*(11/12)*SV)/2, 0.7*SV);
+      footing(ex2 - dirR*0.35*SV, 0.7*SV);
       return ex2;
     }
     // switchback: flight 1 out to a mid landing, return flight comes back UNDER flight 1
