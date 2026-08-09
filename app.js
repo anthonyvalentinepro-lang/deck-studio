@@ -80,7 +80,9 @@ function diaFor(postSp, trib){
 // one rectangular platform. ledgered = has an inner bearing (house ledger or the shared girder).
 // extraSpan stretches the joist span for the lower tier, whose inner girder sits 1 ft behind its back edge.
 function calcDeck(w, d, ledgered, extraSpan){
-  const cant = 1.5;
+  // DCA6: cantilever may not exceed 1/4 of the back-span; his standard 1'-6" applies
+  // whenever the deck is deep enough, and clamps down automatically for shallow decks
+  const cant = ledgered ? Math.min(1.5, d/5) : Math.min(1.5, d/6);
   const joists = Math.floor(w*12/S.spacing)+1;
   const spanTotal = Math.max(2, d - (ledgered ? cant : 2*cant) + (extraSpan||0));
   const maxJ = 14 * (S.spacing===12 ? 1.13 : 1.0);
@@ -94,7 +96,7 @@ function calcDeck(w, d, ledgered, extraSpan){
   const tribDepth = needMid ? spanTotal/2 : spanTotal/2 + cant;
   const dia = diaFor(postSp, tribDepth);
   return { joists: joists, jsize: jsize, spanTotal: spanTotal, needMid: needMid, beamRows: beamRows,
-    perRow: perRow, postSp: postSp, dia: dia, footings: perRow*beamRows, spliced: w > 20 };
+    perRow: perRow, postSp: postSp, dia: dia, footings: perRow*beamRows, spliced: w > 20, cant: cant };
 }
 function calc(){
   const up = calcDeck(S.w, S.d, S.ledger, 0);
@@ -105,7 +107,7 @@ function calc(){
     const railLF = S.rail ? Math.max(0, (S.ledger ? S.w + 2*S.d : 2*S.w + 2*S.d) - (spc ? spc.sw : 0)) : 0;
     const risers = S.stairs ? Math.max(2, Math.ceil(S.h/7.5)) : 0;
     const swb = S.stairs && risers > 12;
-    return { tier2:false, joists:up.joists, jsize:up.jsize, beamRows:up.beamRows, perRow:up.perRow,
+    return { tier2:false, cant:up.cant, joists:up.joists, jsize:up.jsize, beamRows:up.beamRows, perRow:up.perRow,
       footings:up.footings, area:area, deckLF:deckLF, railLF:railLF, risers:risers,
       guardReq:S.h>30, needMid:up.needMid, dia:up.dia, spliced:up.spliced, swb:swb };
   }
@@ -135,7 +137,7 @@ function calc(){
     railLF += S.w2 + 2*S.d2 - (gsp ? gsp.sw : 0);
     railLF = Math.max(0, Math.round(railLF));
   }
-  return { tier2:true, up:up, lo:lo, h2e:h2e, tg:tg, sharedDia:sharedDia, sharedPer:sharedPer,
+  return { tier2:true, cant:up.cant, up:up, lo:lo, h2e:h2e, tg:tg, sharedDia:sharedDia, sharedPer:sharedPer,
     tierRisers:tierRisers, tierRun:tierRun, tierOver:tierOver,
     gsp:gsp, gradeRisers:gradeRisers, swb:gswb,
     girderMembers:girderMembers, footTotal:footTotal, area:area, deckLF:deckLF, railLF:railLF,
@@ -217,8 +219,9 @@ function resolve(){
     }
     // blocking: one staggered row per span segment when the segment runs past 8 ft
     const segs = [];
-    const innerZ = -d/2 + (attached ? 0 : 1.5), outerBeamZ = d/2 - 1.5;
-    if (cd.needMid){ const midZ = attached ? -0.75 : 0; segs.push([innerZ, midZ]); segs.push([midZ, outerBeamZ]); }
+    const cP = cd.cant;
+    const innerZ = -d/2 + (attached ? 0 : cP), outerBeamZ = d/2 - cP;
+    if (cd.needMid){ const midZ = attached ? -cP/2 : 0; segs.push([innerZ, midZ]); segs.push([midZ, outerBeamZ]); }
     else segs.push([innerZ, outerBeamZ]);
     segs.forEach(function(sg){
       if (sg[1]-sg[0] < 5) return;
@@ -325,7 +328,7 @@ function resolve(){
     }
     if (railOn){
       [cx - sw/2, cx + sw/2].forEach(function(hx){
-        [2.85, 0.35].forEach(function(hy){
+        [3.0, 0.35].forEach(function(hy){
           T.push({t:'rail', sh:'box', lx:hx, ly:yTop - drop/2 + hy, lz:z0 + dir*runT/2,
             dx:0.12, dy:0.12, dz:slope, rotX:ang, tier:tier, m:{pos:'stair'}});
         });
@@ -342,7 +345,7 @@ function resolve(){
   function stairs(tier, wF, dF, hIn, sp, railOn, ox, oz){
     const risers = Math.max(2, Math.ceil(hIn/7.5));
     const hft = hIn/12, rise = hft/risers, runL = 11/12, sw = sp.sw;
-    const ron = railOn && hIn > 30;
+    const ron = railOn;   // caller passes the code-resolved handrail/guard requirement
     const swb = risers > 12;
     const T = [];   // local components with lx/ly/lz
     // stair header: doubled member across the opening at the deck edge
@@ -421,17 +424,19 @@ function resolve(){
   // ---- assemble ----
   const hft = S.h/12;
   if (!c.tier2){
-    const rows = S.ledger ? [{z:S.d/2-1.5}] : [{z:S.d/2-1.5},{z:-S.d/2+1.5}];
-    if (c.needMid) rows.push({z: S.ledger ? -0.75 : 0});
+    const cU = c.cant;
+    const rows = S.ledger ? [{z:S.d/2-cU}] : [{z:S.d/2-cU},{z:-S.d/2+cU}];
+    if (c.needMid) rows.push({z: S.ledger ? -cU/2 : 0});
     rows.forEach(function(r){ r.footR=c.dia/24; r.per=c.perRow; r.dia=c.dia; });
     platform(1, S.w, S.d, hft, c, {ox:0, oz:0, attached:S.ledger, rows:rows, jExt:0});
     const sp = stairPlace();
     if (S.rail) railing(1, S.w, S.d, hft, sp, !S.ledger, 0, 0);
-    if (S.stairs && sp) stairs(1, S.w, S.d, S.h, sp, S.rail, 0, 0);
+    if (S.stairs && sp) stairs(1, S.w, S.d, S.h, sp, (S.rail && S.h > 30) || c.risers >= 4, 0, 0);
   } else {
     const hft2 = c.h2e/12, tg = c.tg;
-    const rowsU = S.ledger ? [{z:S.d/2-1.5, shared:true}] : [{z:S.d/2-1.5, shared:true},{z:-S.d/2+1.5}];
-    if (c.up.needMid) rowsU.push({z: S.ledger ? -0.75 : 0});
+    const cUp = c.up.cant;
+    const rowsU = S.ledger ? [{z:S.d/2-cUp, shared:true}] : [{z:S.d/2-cUp, shared:true},{z:-S.d/2+cUp}];
+    if (c.up.needMid) rowsU.push({z: S.ledger ? -cUp/2 : 0});
     rowsU.forEach(function(r){
       r.per = r.shared ? c.sharedPer : c.up.perRow;
       r.dia = r.shared ? c.sharedDia : c.up.dia;
@@ -453,12 +458,12 @@ function resolve(){
       }
     }
     // lower tier: joists reach back 1 ft to a girder bolted on the shared posts
-    const rowsL = [{z:S.d2/2-1.5, per:c.lo.perRow, dia:c.lo.dia, footR:c.lo.dia/24},
+    const rowsL = [{z:S.d2/2-c.lo.cant, per:c.lo.perRow, dia:c.lo.dia, footR:c.lo.dia/24},
                    {z:-S.d2/2-1.0, noPosts:true, m:{shared:true}}];
     if (c.lo.needMid) rowsL.push({z:-1.5, per:c.lo.perRow, dia:c.lo.dia, footR:c.lo.dia/24});
     platform(2, S.w2, S.d2, hft2, c.lo, {ox:tg.cx2, oz:S.d/2 + S.d2/2, attached:false, rows:rowsL, jExt:1});
     if (S.rail) railing(2, S.w2, S.d2, hft2, c.gsp, false, tg.cx2, S.d/2 + S.d2/2);
-    if (S.stairs && c.gsp) stairs(2, S.w2, S.d2, c.h2e, c.gsp, S.rail, tg.cx2, S.d/2 + S.d2/2);
+    if (S.stairs && c.gsp) stairs(2, S.w2, S.d2, c.h2e, c.gsp, (S.rail && c.h2e > 30) || c.gradeRisers >= 4, tg.cx2, S.d/2 + S.d2/2);
   }
 
   // model-derived counts (single source shared by takeoff + legend; drawings project the same list)
@@ -522,8 +527,10 @@ function renderTakeoff(){
     rows.push(['Hardware', hwStr]);
     if (S.rail) rows.push(['Railing', '~'+c.railLF+' LF']);
     if (S.stairs){ const sp2 = stairPlace(); rows.push(['Stairs', (sp2 ? sp2.sw : S.stairW)+"' wide / "+c.risers+' risers / '+K.stringers+' stringers'+(c.swb?' / switchback':'')]); }
+    if (S.stairs && c.risers >= 4) rows.push(['Handrail', 'required (4+ risers) — included']);
     if (S.stairs) rows.push(['Stair footings', K.footingsSono+' @ 8" dia sonotube']);
-    rows.push(['Guards', c.guardReq ? 'REQUIRED (>30")' : 'not required']);
+    if (S.stairs) rows.push(['Stair landing', '36" min pad at grade']);
+    rows.push(['Guards', c.guardReq ? 'REQUIRED (>30") — included' : 'not required']);
     if (S.h >= 72) rows.push(['Post bracing', 'knee braces req’d']);
     note = (c.swb ? 'Over 12 risers: mid landing added, stair shown as a standard switchback. ' : '')
       + (c.needMid ? 'Second girder row added: joist span is past the 2x10 table. ' : '')
@@ -548,8 +555,10 @@ function renderTakeoff(){
     if (S.rail) rows.push(['Railing', '~'+c.railLF+' LF']);
     if (c.tierRisers > 0) rows.push(['Tier stair', c.tg.tierSw+"' wide / "+c.tierRisers+' risers']);
     if (S.stairs && c.gsp) rows.push(['Grade stair', c.gsp.sw+"' wide / "+c.gradeRisers+' risers / '+K.stringers+' stringers'+(c.swb?' / switchback':'')]);
+    if (S.stairs && c.gradeRisers >= 4) rows.push(['Handrail', 'required (4+ risers) — included']);
     if (S.stairs) rows.push(['Stair footings', K.footingsSono+' @ 8" dia sonotube']);
-    rows.push(['Guards', c.guardReq ? 'REQUIRED (>30")' : (c.guardLo ? 'REQUIRED on lower (>30")' : 'not required')]);
+    if (S.stairs) rows.push(['Stair landing', '36" min pad at grade']);
+    rows.push(['Guards', c.guardReq ? 'REQUIRED (>30") — included' : (c.guardLo ? 'REQUIRED on lower (>30") — included' : 'not required')]);
     if (S.h >= 72) rows.push(['Post bracing', 'knee braces req’d']);
     note = 'Lower tier hangs on the upper girder posts: shared row runs '+c.sharedPer+' posts on '+c.sharedDia+'" footings. '
       + (S.h >= 72 ? 'Posts over 6 ft get diagonal knee bracing — final bracing in the drawings. ' : '')
@@ -1111,14 +1120,14 @@ function renderPlan(){
   }
   const ftIn = function(v){ const f2=Math.floor(v+0.001); const in2=Math.round((v-f2)*12); return f2+"'-"+in2+'"'; };
   if (MODE==='framing' && (!planSp || (planSp.edge!=='right' && planSp.edge!=='left'))){
-    const gyC = y0 + (S.d-1.5)*sc;
-    dim(x0+dw, y0, x0+dw, gyC, ftIn(S.d-1.5), 30, true);
-    dim(x0+dw, gyC, x0+dw, y0+dd, "1'-6\"", 30, true);
+    const gyC = y0 + (S.d-c.cant)*sc;
+    dim(x0+dw, y0, x0+dw, gyC, ftIn(S.d-c.cant), 30, true);
+    dim(x0+dw, gyC, x0+dw, y0+dd, ftIn(c.cant), 30, true);
   }
   // post-spacing chain along the beam with centerline marks (his framing-plan signature)
   if (MODE==='framing'){
-    const rowY = y0 + (S.d/2-1.5 + S.d/2)*sc;
-    const pxmRow = MQ.postsAt(1, S.d/2-1.5);
+    const rowY = y0 + (S.d/2-c.cant + S.d/2)*sc;
+    const pxmRow = MQ.postsAt(1, S.d/2-c.cant);
     const pxs = pxmRow.map(function(mx){ return x0 + (mx + S.w/2)*sc; });
     const psp2 = pxmRow.length>1 ? (pxmRow[1] - pxmRow[0]) : 0;
     pxs.forEach(function(pxc){
@@ -1129,7 +1138,7 @@ function renderPlan(){
     for (let i4=0;i4<chain.length-1;i4++){
       const a5=chain[i4], b5=chain[i4+1];
       if (b5-a5 < 14) continue;
-      const lbl2 = (i4===0 || i4===chain.length-2) ? "1'-6\"" : ftIn(psp2);
+      const lbl2 = (i4===0 || i4===chain.length-2) ? ftIn(1.5) : ftIn(psp2);
       s += '<line x1="'+a5+'" y1="'+(chY-4)+'" x2="'+a5+'" y2="'+(chY+4)+'" stroke="#0C0E11" stroke-width="0.9"/>';
       s += '<line x1="'+b5+'" y1="'+(chY-4)+'" x2="'+b5+'" y2="'+(chY+4)+'" stroke="#0C0E11" stroke-width="0.9"/>';
       s += '<line x1="'+a5+'" y1="'+chY+'" x2="'+b5+'" y2="'+chY+'" stroke="#0C0E11" stroke-width="0.9"/>';
@@ -1215,11 +1224,12 @@ function renderPlanTier2(c, W, H, m, availW, availH){
     s += '<line x1="'+(jx+jh2)+'" y1="'+Y(-d/2)+'" x2="'+(jx+jh2)+'" y2="'+Y(d/2)+'" stroke="#0C0E11" stroke-width="0.6" opacity="0.6"/>';
   }
   // upper girder rows (outer row is the shared row, circles upsized)
-  const rowsZU = (MODE==='framing') ? (S.ledger ? [d/2-1.5] : [d/2-1.5, -d/2+1.5]) : [];
-  if (c.up.needMid) rowsZU.push(S.ledger ? -0.75 : 0);
+  const cU2 = c.up.cant;
+  const rowsZU = (MODE==='framing') ? (S.ledger ? [d/2-cU2] : [d/2-cU2, -d/2+cU2]) : [];
+  if (c.up.needMid) rowsZU.push(S.ledger ? -cU2/2 : 0);
   rowsZU.forEach(function(z){
     const by = Y(z);
-    const shared = (z === d/2-1.5);
+    const shared = (z === d/2-cU2);
     const diaHere = shared ? c.sharedDia : c.up.dia;
     const perHere = shared ? c.sharedPer : c.up.perRow;
     const fr = Math.max(7, Math.round(9 * diaHere/16));
@@ -1232,7 +1242,7 @@ function renderPlanTier2(c, W, H, m, availW, availH){
       s += '<line x1="'+(px-fr*0.7)+'" y1="'+(by-fr*0.7)+'" x2="'+(px+fr*0.7)+'" y2="'+(by+fr*0.7)+'" stroke="#FF5A1F" stroke-width="1.6"/>';
       s += '<line x1="'+(px-fr*0.7)+'" y1="'+(by+fr*0.7)+'" x2="'+(px+fr*0.7)+'" y2="'+(by-fr*0.7)+'" stroke="#FF5A1F" stroke-width="1.6"/>';
     }
-    if (z === d/2-1.5){
+    if (z === d/2-cU2){
       s += '<text x="'+(X(-w/2)-12)+'" y="'+(by+3)+'" text-anchor="end" font-family="IBM Plex Mono" font-size="8.5" fill="#0C0E11">SHARED ROW</text>';
     }
   });
@@ -1252,8 +1262,8 @@ function renderPlanTier2(c, W, H, m, availW, availH){
     s += '<line x1="'+(jx+jh3)+'" y1="'+Y(d/2)+'" x2="'+(jx+jh3)+'" y2="'+Y(d/2+d2)+'" stroke="#0C0E11" stroke-width="0.6" opacity="0.6"/>';
   }
   // lower girder rows
-  const rowsZL = (MODE==='framing') ? [d/2+d2-1.5] : [];
-  if (c.lo.needMid) rowsZL.push(d/2 + d2/2 - 1.5);
+  const rowsZL = (MODE==='framing') ? [d/2+d2-c.lo.cant] : [];
+  if (c.lo.needMid) rowsZL.push(d/2 + d2/2 - c.lo.cant);
   const frL = Math.max(7, Math.round(9 * c.lo.dia/16));
   rowsZL.forEach(function(z){
     const by = Y(z);
@@ -1709,11 +1719,12 @@ function renderElevation(kind){
       } else railFront(x0, x0+dw, deckTop);
     }
     if (!c.tier2 && S.stairs && sp){
+      const hrF = (S.rail && S.h > 30) || c.risers >= 4;
       if (sp.edge==='front'){
         frontalStair(cutA, cutB-cutA, deckTop, GY, c.risers, true);
       } else {
         const dirR=(sp.edge==='left')?-1:1;
-        stairProfile(dirR>0? x0+dw : x0, deckTop, c.risers, dirR, true);
+        stairProfile(dirR>0? x0+dw : x0, deckTop, c.risers, dirR, hrF);
       }
     }
     let loTop=null, lx0=0, lw=0;
@@ -1788,12 +1799,12 @@ function renderElevation(kind){
     ln(faceX, deckTop+2.5, faceX+dpx, deckTop+2.5, 0.8, null, 0.7);
     rc(faceX, deckTop+2, dpx, 0.83*SV, 1.4);
     const yJb=deckTop+2+0.83*SV;
-    const gx=faceX+(S.d-1.5)*SV;
+    const gx=faceX+(S.d-c.cant)*SV;
     rc(gx-0.24*SV, yJb, 0.48*SV, 0.85*SV, 1.8);
     ln(gx-0.08*SV, yJb, gx-0.08*SV, yJb+0.85*SV, 0.7, null, 0.7);
     ln(gx+0.08*SV, yJb, gx+0.08*SV, yJb+0.85*SV, 0.7, null, 0.7);
     postAt(gx, yJb+0.85*SV);
-    if (!S.ledger){ const gx0=faceX+1.5*SV; rc(gx0-0.24*SV,yJb,0.48*SV,0.85*SV,1.8); postAt(gx0, yJb+0.85*SV); }
+    if (!S.ledger){ const gx0=faceX+c.cant*SV; rc(gx0-0.24*SV,yJb,0.48*SV,0.85*SV,1.8); postAt(gx0, yJb+0.85*SV); }
     let cutSA=null, cutSB=null;
     if (!S.tier2 && S.stairs && spS && spS.edge!=='front'){
       cutSA = faceX + (spS.c - spS.sw/2 + S.d/2)*SV; cutSB = cutSA + spS.sw*SV;
@@ -1808,13 +1819,14 @@ function renderElevation(kind){
     let endX=faceX+dpx;
     if (!S.tier2){
       if (S.stairs){
+        const hr = (S.rail && S.h > 30) || c.risers >= 4;
         if (spS && spS.edge!=='front'){ frontalStair(cutSA, cutSB-cutSA, deckTop, GY, c.risers, true); }
-        else endX = stairProfile(faceX+dpx, deckTop, c.risers, 1, true);
+        else endX = stairProfile(faceX+dpx, deckTop, c.risers, 1, hr);
       }
       grade(Math.min(faceX-(S.ledger?18:0), B.x0)-26, Math.max(endX,B.x1)+28);
       const LX=B.x0-28, RX=Math.max(B.x1,endX)+30, BY=Math.max(B.y1,GY+30)+22;
-      hdim(faceX, gx, BY, ftIn(S.d-1.5), null);
-      hdim(gx, faceX+dpx, BY, "1'-6\"", null);
+      hdim(faceX, gx, BY, ftIn(S.d-c.cant), null);
+      hdim(gx, faceX+dpx, BY, ftIn(c.cant), null);
       hdim(faceX, faceX+dpx, BY+26, S.d+"'-0\"", null);
       if (S.rail) vdim(RX, deckTop-3.0*SV, deckTop, '36"');
       vdim(RX, deckTop, GY, S.h+'"');
@@ -1824,7 +1836,7 @@ function renderElevation(kind){
       ln(faceX+dpx, loTop, faceX+dpx+d2px, loTop, 2.5);
       rc(faceX+dpx, loTop+2, d2px, 0.83*SV, 1.4);
       const yJb2=loTop+2+0.83*SV;
-      const gx2=faceX+(S.d+S.d2-1.5)*SV;
+      const gx2=faceX+(S.d+S.d2-c.lo.cant)*SV;
       rc(gx2-0.24*SV, yJb2, 0.48*SV, 0.85*SV, 1.8);
       postAt(gx2, yJb2+0.85*SV);
       postAt(gx, yJb+0.85*SV);
@@ -1886,6 +1898,11 @@ function syncField(id, val){
 }
 function refresh(){
   modelDirty();
+  // code: guards are not optional over 30" — the tool includes them automatically
+  const guardMust = S.h > 30 || (S.tier2 && h2eff() > 30);
+  if (guardMust && !S.rail) S.rail = true;
+  const swR = document.getElementById('swRail');
+  if (swR){ swR.classList.toggle('on', S.rail); swR.style.opacity = guardMust ? '0.45' : ''; swR.dataset.lock = guardMust ? '1' : ''; }
   syncField('inW', S.w); syncField('numW', S.w);
   syncField('inD', S.d); syncField('numD', S.d);
   syncField('inH', S.h); syncField('numH', S.h);
@@ -1956,6 +1973,7 @@ document.querySelectorAll('#segSpace button').forEach(function(b){
 });
 [['swLedger','ledger'],['swStairs','stairs'],['swRail','rail']].forEach(function(pair){
   document.getElementById(pair[0]).addEventListener('click', function(){
+    if (this.dataset.lock === '1') return;  // guards required by code at this height
     this.classList.toggle('on'); S[pair[1]] = this.classList.contains('on'); refresh();
   });
 });
