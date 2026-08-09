@@ -1546,23 +1546,20 @@ function renderElevation(kind){
         s += '<path d="M'+xa+' '+ya+' L'+xb+' '+yb+' L'+xb+' '+(yb+h)+' L'+xa+' '+(ya+h)+' Z" fill="#F2EFE7" stroke="#0C0E11" stroke-width="1.1"/>';
         upd(xa,ya); upd(xb,yb+h);
       };
-      // sloped cap + sub-rail, post face to post face
+      // sloped cap + sub-rail AND bottom rail, post face to post face (same system as the deck guard)
+      const botH2=Math.max(2,0.12*SV);
+      const railBotOff = 3.0*SV-0.35*SV-botH2;
       poly(nTx, g1y, nBx, g2y, capH);
       poly(nTx, g1y+capH, nBx, g2y+capH, subH);
-      // plumb balusters from the sub-rail down onto the treads
-      // each baluster foot lands on ITS tread surface (stepping down bay by bay)
-      const treadTopAt = function(bx){
-        const u = (bx - x0s)/(dirR*runp);
-        const k = Math.max(0, Math.min(n-1, Math.floor(u)));
-        return Math.min(botY, topY + rise*(k+1));
-      };
+      poly(nTx, g1y+railBotOff, nBx, g2y+railBotOff, botH2);
+      // balusters between the rails (equal length along the slope)
       const bw2=Math.max(1.6,0.12*SV), pitch2=Math.max(bw2*2.1,0.34*SV);
       const span2=Math.abs(nBx-nTx), nB3=Math.floor(span2/pitch2);
       for (let b3=1;b3<nB3;b3++){
         const bt=b3/nB3, bx2=nTx+(nBx-nTx)*bt;
         const yTopB=g1y+(g2y-g1y)*bt+capH+subH;
-        const yBotB=treadTopAt(bx2)-0.5;
-        if (yBotB - yTopB > 2) rc(bx2-bw2/2, yTopB, bw2, yBotB-yTopB, 0.9, null, '#F2EFE7');
+        const yBotB=g1y+(g2y-g1y)*bt+railBotOff;
+        rc(bx2-bw2/2, yTopB, bw2, yBotB-yTopB, 0.9, null, '#F2EFE7');
       }
       // newels: top one rides the deck corner post; bottom one is full height off the grade
       [[nTx, g1y, topY+0.2*SV],[nBx, g2y, botY]].forEach(function(pp){
@@ -1744,10 +1741,10 @@ function renderElevation(kind){
     const LX=B.x0-28, RX=B.x1+30, TY=B.y0-22, BY=Math.max(B.y1, GY+30)+22;
     hdim(x0, x0+dw, TY, w+"'-0\"", null);
     tx((x0+dw/2), TY+11, 'PROPOSED DECK', DF, 'middle');
+    if (S.rail) vdim(RX, deckTop-3.0*SV, deckTop, '36"');
     vdim(RX, deckTop, GY, S.h+'"');
-    if (c.tier2 && loTop!==null) vdim(RX+30, loTop, GY, c.h2e+'"');
-    if (S.rail) vdim(LX, deckTop-3.0*SV, deckTop, '36"');
-    vdim(LX, GY, GY+30, '30"-36"');
+    vdim(RX, GY, GY+30, '30"-36"');
+    if (c.tier2 && loTop!==null) vdim(RX+26, loTop, GY, c.h2e+'"');
     hdim(px1st-0.45*SV, px1st+0.45*SV, BY+14, Math.round(c.dia)+'"', null);
   } else {
   // ================= SIDE =================
@@ -1807,9 +1804,9 @@ function renderElevation(kind){
       hdim(faceX, gx, BY, ftIn(S.d-1.5), null);
       hdim(gx, faceX+dpx, BY, "1'-6\"", null);
       hdim(faceX, faceX+dpx, BY+26, S.d+"'-0\"", null);
+      if (S.rail) vdim(RX, deckTop-3.0*SV, deckTop, '36"');
       vdim(RX, deckTop, GY, S.h+'"');
-      if (S.rail) vdim(RX+30, deckTop-3.0*SV, deckTop, '36"');
-      vdim(LX, GY, GY+30, '30"-36"');
+      vdim(RX, GY, GY+30, '30"-36"');
     } else {
       const d2px=S.d2*SV, loTop=GY-h2ft*SV;
       ln(faceX+dpx, loTop, faceX+dpx+d2px, loTop, 2.5);
@@ -1846,9 +1843,10 @@ function renderElevation(kind){
       const LX=B.x0-28, RX=Math.max(B.x1,endX)+30, BY=Math.max(B.y1,GY+30)+22;
       hdim(faceX, faceX+dpx, BY, S.d+"'-0\"", null);
       hdim(faceX+dpx, faceX+dpx+d2px, BY, S.d2+"'-0\"", null);
+      if (S.rail) vdim(RX, deckTop-3.0*SV, deckTop, '36"');
       vdim(RX, deckTop, GY, S.h+'"');
-      vdim(RX+30, loTop, GY, c.h2e+'"');
-      vdim(LX, GY, GY+30, '30"-36"');
+      vdim(RX, GY, GY+30, '30"-36"');
+      vdim(RX+26, loTop, GY, c.h2e+'"');
     }
   }
   s = '<g id="ds-vg">' + s + '</g>';
