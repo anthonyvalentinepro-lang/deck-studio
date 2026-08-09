@@ -1505,14 +1505,18 @@ function renderElevation(kind){
       footing(px3, 0.66*SV);
     });
     if (S.rail){
-      // landing guard: horizontal rail 36" above the landing
+      // landing guard: horizontal rail 36" above the landing, closed by end posts
       ln(lx1, yL-3.0*SV, lx1+lw2, yL-3.0*SV, 2.2);
       ln(lx1, yL-3.0*SV+0.5*SV, lx1+lw2, yL-3.0*SV+0.5*SV, 1.2);
       for (let bx3=lx1+0.3*SV; bx3<lx1+lw2; bx3+=0.38*SV){ ln(bx3, yL-3.0*SV+0.5*SV, bx3, yL-0.05*SV, 0.6, null, 0.65); }
+      [lx1, lx1+lw2-0.28*SV].forEach(function(gx3){
+        rc(gx3, yL-3.0*SV-3, 0.28*SV, 3.0*SV+3, 1.3, null, '#F2EFE7');
+        rc(gx3-0.06*SV, yL-3.0*SV-7, 0.4*SV, 4, 1.2, null, '#F2EFE7');
+      });
     }
     // return flight descends back toward the deck, beneath flight 1
     const ex3 = profileFlight(x1, yL, GY, n2, -dirR, withRail);
-    footing(x1 - dirR*(n2*runp)/2, 0.7*SV);
+    footing(x1 - dirR*(n2*runp) + dirR*0.35*SV, 0.7*SV);
     return Math.max(x1+dirR*Ld, ex3, x0s) ;
   };
   let SV;
@@ -1538,6 +1542,7 @@ function renderElevation(kind){
       rc(sxL, yL-0.28*SV, 2*swPx, 0.28*SV, 1.5, null, '#F2EFE7');
       // column 2: landing down to grade
       ln(sxR, yL, sx2R, yL, 1.6);
+      ln(sxR, yL-0.28*SV, sxR, botY, 1.6);
       ln(sx2R, yL-0.28*SV, sx2R, botY, 1.6);
       for (let r2=1; r2<n2; r2++){ const yy = yL + r2*((botY-yL)/n2); ln(sxR, yy, sx2R, yy, 1); }
       ln(sxL, botY, sx2R, botY, 1, null, 0.001);
@@ -1666,10 +1671,13 @@ function renderElevation(kind){
     const faceX = MOB?96:140;
     const deckTop = GY-hft*SV;
     if (S.ledger){
-      const wallW=18, wTop=Math.max(26, deckTop-3.6*SV);
+      const wallW=18, wTop=Math.max(26, deckTop-4.2*SV);
       rc(faceX-wallW, wTop, wallW, GY-wTop, 1.4, null, null, true);
       for (let sy=wTop+10; sy<GY-6; sy+=11){ ln(faceX-wallW, sy, faceX, sy-5, 0.5, null, 0.3, true); }
       ln(faceX, wTop, faceX, GY, 2.2, null, null, true);
+      // the dwelling continues above: mask the top edge and draw a break line
+      s += '<rect x="'+(faceX-wallW-3)+'" y="'+(wTop-2.5)+'" width="'+(wallW+6)+'" height="5" fill="#F2EFE7"/>';
+      s += '<path d="M'+(faceX-wallW-3)+' '+wTop+' l4 -4 l5 8 l5 -8 l5 8 l4 -4" fill="none" stroke="#0C0E11" stroke-width="1.2"/>';
       rc(faceX, deckTop+2, 4, 0.83*SV, 1.6, null, '#0C0E11');
     }
     const dpx=S.d*SV;
