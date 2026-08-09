@@ -1031,7 +1031,10 @@ function renderPlan(){
       planSl = nSh*run;
       rect(0, 0, swp, planSl);
       if (MODE==='framing'){
-        [8, swp/2, swp-8].forEach(function(su){ tline(su, 2, su, planSl-2); });
+        (function(){
+          const nStr = Math.max(2, Math.ceil((planSp.sw)*12/18)+1), th = Math.max(1.2, 0.125*sc);
+          for (let si=0; si<nStr; si++){ const su = 6 + si*((swp-12)/(nStr-1)); tline(su-th/2, 2, su-th/2, planSl-2); tline(su+th/2, 2, su+th/2, planSl-2); }
+        })();
         sf(7, planSl - 7); sf(swp - 7, planSl - 7);
       } else {
         for (let st=1; st<nSh; st++) tline(0, st*run, swp, st*run);
@@ -1067,7 +1070,7 @@ function renderPlan(){
   }
   // railing: inset guard line on railed edges, broken at the stair (deck plan mode)
   if (MODE==='decking' && S.rail){
-    const ro = 5;
+    const ro = Math.max(7, 0.32*sc);   // hold the guard clearly inboard of the deck edge line
     // railing per drafting standard: double rail line CENTERED on hollow post squares <= 6'-0" OC
     const psq2 = Math.max(4, 0.46*sc), rw = Math.max(2.2, 0.22*sc);
     const _railSegs = [], _postPts = [], _postCells = {};
@@ -1360,7 +1363,10 @@ function renderPlanTier2(c, W, H, m, availW, availH){
       planSl = nSh*run;
       rect(0, 0, swp, planSl);
       if (MODE==='framing'){
-        [8, swp/2, swp-8].forEach(function(su){ tline(su, 2, su, planSl-2); });
+        (function(){
+          const nStr = Math.max(2, Math.ceil((planSp.sw)*12/18)+1), th = Math.max(1.2, 0.125*sc);
+          for (let si=0; si<nStr; si++){ const su = 6 + si*((swp-12)/(nStr-1)); tline(su-th/2, 2, su-th/2, planSl-2); tline(su+th/2, 2, su+th/2, planSl-2); }
+        })();
         sf(7, planSl - 7); sf(swp - 7, planSl - 7);
       } else {
         for (let st=1; st<nSh; st++) tline(0, st*run, swp, st*run);
@@ -1396,7 +1402,7 @@ function renderPlanTier2(c, W, H, m, availW, availH){
   }
   // railing: inset guard lines; upper cut at the tier stair, lower cut at the grade stair (deck plan)
   if (MODE==='decking' && S.rail){
-    const ro = 5;
+    const ro = Math.max(7, 0.32*sc);
     const psq3 = Math.max(4, 0.46*sc), rw3 = Math.max(2.2, 0.22*sc);
     const _rs2 = [], _pp2 = [], _pc2 = {};
     const rseg = function(x1,y1,x2,y2){
