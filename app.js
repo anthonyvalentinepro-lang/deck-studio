@@ -144,67 +144,399 @@ function calc(){
     footings:footTotal, needMid:up.needMid, dia:up.dia, risers:gradeRisers };
 }
 
-// ---------- takeoff panel ----------
-function footStr(c){
-  const parts = [];
-  const add = function(n, dia){
-    if (n <= 0) return;
-    const hit = parts.find(function(p){ return p.dia === dia; });
-    if (hit) hit.n += n; else parts.push({n:n, dia:dia});
-  };
-  add(c.sharedPer, c.sharedDia);
-  add((c.up.beamRows - 1) * c.up.perRow, c.up.dia);
-  add(c.lo.footings, c.lo.dia);
-  parts.sort(function(a,b){ return b.dia - a.dia; });
-  return parts.map(function(p){ return p.n+' @ '+p.dia+'"'; }).join(' + ');
-}
-function renderTakeoff(){
+// ---------- MODEL CORE (Revit-style: params -> one resolved model -> every view projects it) ----------
+// Part vocabulary follows Anthony's 16-part diagram, in diagram order.
+const PARTS = [
+  {p:1,  t:'footing',  name:'Footings'},
+  {p:2,  t:'post',     name:'Support Posts'},
+  {p:3,  t:'ledger',   name:'Ledger'},
+  {p:4,  t:'joist',    name:'Joists'},
+  {p:5,  t:'beam',     name:'Beams'},
+  {p:6,  t:'blocking', name:'Blocking'},
+  {p:7,  t:'stringer', name:'Stair Stringers'},
+  {p:8,  t:'stairhdr', name:'Stair Header'},
+  {p:9,  t:'hw',       name:'Structural Hardware'},
+  {p:10, t:'flashing', name:'Flashing'},
+  {p:11, t:'decking',  name:'Decking'},
+  {p:12, t:'tread',    name:'Stair Treads & Risers'},
+  {p:13, t:'fascia',   name:'Fascia'},
+  {p:14, t:'railpost', name:'Railing Posts'},
+  {p:15, t:'rail',     name:'Rails'},
+  {p:16, t:'baluster', name:'Balusters'}
+];
+const PART_BY_T = {}; PARTS.forEach(function(pp){ PART_BY_T[pp.t]=pp; });
+
+// Component: {t, p, sh:'box'|'cyl', x,y,z (world ft, y up from grade), dx,dy,dz | r,len,
+//             rotX?,rotY?, tier, detail:'free'|'paid', m:{...}}
+// World frame matches the 3D scene: x along house (centered), z out from house (face at -d/2), y up.
+function resolve(){
   const c = calc();
+  const C = [];
+  const add = function(t, sh, o){
+    const pp = PART_BY_T[t];
+    C.push(Object.assign({t:t, p:pp.p, sh:sh, tier:o.tier||1, detail:o.detail||'free', m:o.m||{}}, o));
+  };
+  const t = 1/12, boardW = 0.46;
+
+  // one platform (tier): emits decking, rim+fascia, ledger+flashing+hangers (if inner bearing is the house),
+  // joists (+jExt reach-back), blocking, beams+posts+footings+hardware per row
+  function platform(tier, w, d, hft, cd, opts){
+    const ox = opts.ox||0, oz = opts.oz||0;           // world offset of platform center
+    const attached = opts.attached;                    // inner bearing is house ledger
+    const rows = opts.rows;                            // [{z(local), footR, per, dia, noPosts}]
+    const jExt = opts.jExt||0;
+    // decking
+    const nB = Math.floor(d/boardW);
+    for (let i=0;i<nB;i++)
+      add('decking','box',{x:ox, y:hft, z:oz - d/2 + boardW/2 + i*boardW, dx:w, dy:t, dz:boardW-0.06, tier:tier, m:{alt:i%2}});
+    // rim joist (outer face) stays structural; fascia covers it
+    add('joist','box',{x:ox, y:hft-0.36, z:oz + d/2 - 0.07, dx:w, dy:0.62, dz:0.13, tier:tier, m:{rim:true}});
+    add('fascia','box',{x:ox, y:hft-0.34, z:oz + d/2 + 0.02, dx:w, dy:0.68, dz:0.06, tier:tier});
+    add('fascia','box',{x:ox - w/2 - 0.02, y:hft-0.34, z:oz, dx:0.06, dy:0.68, dz:d, tier:tier});
+    add('fascia','box',{x:ox + w/2 + 0.02, y:hft-0.34, z:oz, dx:0.06, dy:0.68, dz:d, tier:tier});
+    if (!attached) add('fascia','box',{x:ox, y:hft-0.34, z:oz - d/2 - 0.02, dx:w, dy:0.68, dz:0.06, tier:tier});
+    // ledger + flashing + hangers + hold-downs on the house face
+    if (attached){
+      add('ledger','box',{x:ox, y:hft-0.36, z:oz - d/2 + 0.065, dx:w, dy:0.62, dz:0.13, tier:tier, m:{size:cd.jsize}});
+      add('flashing','box',{x:ox, y:hft+0.08, z:oz - d/2 + 0.02, dx:w+0.3, dy:0.3, dz:0.04, tier:tier});
+    }
+    // joists
+    const xs = [];
+    for (let j=0;j<cd.joists;j++){
+      const x = -w/2 + j*(S.spacing/12);
+      if (x > w/2) break;
+      xs.push(Math.min(x, w/2-0.07));
+    }
+    xs.forEach(function(x){
+      add('joist','box',{x:ox+x, y:hft-0.36, z:oz - jExt/2, dx:0.13, dy:0.62, dz:d + jExt, tier:tier, m:{size:cd.jsize}});
+      if (attached) add('hw','box',{x:ox+x, y:hft-0.42, z:oz - d/2 + 0.16, dx:0.2, dy:0.34, dz:0.06, tier:tier, m:{kind:'hanger'}});
+    });
+    if (attached){
+      add('hw','box',{x:ox - (w/2-1), y:hft-0.36, z:oz - d/2 + 0.18, dx:0.38, dy:0.38, dz:0.1, tier:tier, m:{kind:'holddown'}});
+      add('hw','box',{x:ox + (w/2-1), y:hft-0.36, z:oz - d/2 + 0.18, dx:0.38, dy:0.38, dz:0.1, tier:tier, m:{kind:'holddown'}});
+    }
+    // blocking: one staggered row per span segment when the segment runs past 8 ft
+    const segs = [];
+    const innerZ = -d/2 + (attached ? 0 : 1.5), outerBeamZ = d/2 - 1.5;
+    if (cd.needMid){ const midZ = attached ? -0.75 : 0; segs.push([innerZ, midZ]); segs.push([midZ, outerBeamZ]); }
+    else segs.push([innerZ, outerBeamZ]);
+    segs.forEach(function(sg){
+      if (sg[1]-sg[0] < 5) return;
+      const zb = (sg[0]+sg[1])/2;
+      for (let j=0;j<xs.length-1;j++){
+        const gap = xs[j+1]-xs[j]; if (gap < 0.3) continue;
+        add('blocking','box',{x:ox+(xs[j]+xs[j+1])/2, y:hft-0.36, z:oz + zb + (j%2? 0.09 : -0.09),
+          dx:gap-0.13, dy:0.62, dz:0.13, tier:tier});
+      }
+    });
+    // beams + posts + footings + post bases
+    rows.forEach(function(rs){
+      add('beam','box',{x:ox, y:hft-0.85, z:oz+rs.z, dx:w, dy:0.8, dz:0.42, tier:tier, m:Object.assign({plies:3, size:'2x10'}, rs.m||{})});
+      if (rs.noPosts) return;
+      const per = rs.per;
+      for (let p2=0;p2<per;p2++){
+        const px = -w/2 + 1.5 + p2*(Math.max(0.5,w-3)/(per-1));
+        add('post','box',{x:ox+px, y:(hft-1.2)/2, z:oz+rs.z, dx:0.5, dy:Math.max(0.4,hft-1.2), dz:0.5, tier:tier});
+        add('hw','box',{x:ox+px, y:0.29, z:oz+rs.z, dx:0.55, dy:0.08, dz:0.55, tier:tier, m:{kind:'postbase'}});
+        add('footing','cyl',{x:ox+px, y:0.12, z:oz+rs.z, r:rs.dia/24, len:0.25, tier:tier, m:{dia:rs.dia}});
+      }
+    });
+    return xs;
+  }
+
+  // railing segments for one platform: [{axis:'x'|'z', at(local), a, b}] minus one stair cut
+  function railSegs(w, d, cut, includeBack){
+    const out = [];
+    const addEdge = function(axis, at, L, cutHere){
+      const parts = cutHere
+        ? [{a:-L/2, b:cutHere.c - cutHere.sw/2}, {a:cutHere.c + cutHere.sw/2, b:L/2}]
+        : [{a:-L/2, b:L/2}];
+      parts.forEach(function(pp){ if (pp.b - pp.a > 0.4) out.push({axis:axis, at:at, a:pp.a, b:pp.b}); });
+    };
+    addEdge('x', d/2, w, (cut && cut.edge==='front') ? cut : null);
+    addEdge('z', -w/2, d, (cut && cut.edge==='left') ? cut : null);
+    addEdge('z', w/2, d, (cut && cut.edge==='right') ? cut : null);
+    if (includeBack) addEdge('x', -d/2, w, null);
+    return out;
+  }
+  function railing(tier, w, d, hft, cut, includeBack, ox, oz){
+    const railTop = 3.0, botY = 0.35;
+    railSegs(w, d, cut, includeBack).forEach(function(sg){
+      const len = sg.b - sg.a; if (len < 0.8) return;
+      const mid = (sg.a + sg.b)/2;
+      const P = function(off){ return sg.axis==='x' ? {x:ox+off, z:oz+sg.at} : {x:ox+sg.at, z:oz+off}; };
+      const mp = P(mid);
+      if (sg.axis==='x'){
+        add('rail','box',{x:mp.x, y:hft+railTop-0.09, z:mp.z, dx:len, dy:0.17, dz:0.26, tier:tier, m:{pos:'top'}});
+        add('rail','box',{x:mp.x, y:hft+botY, z:mp.z, dx:len, dy:0.11, dz:0.19, tier:tier, m:{pos:'bottom'}});
+      } else {
+        add('rail','box',{x:mp.x, y:hft+railTop-0.09, z:mp.z, dx:0.26, dy:0.17, dz:len, tier:tier, m:{pos:'top'}});
+        add('rail','box',{x:mp.x, y:hft+botY, z:mp.z, dx:0.19, dy:0.11, dz:len, tier:tier, m:{pos:'bottom'}});
+      }
+      const nP = Math.max(2, Math.ceil(len/6)+1);
+      for (let p2=0;p2<nP;p2++){
+        const q = P(sg.a + p2*(len/(nP-1)));
+        add('railpost','box',{x:q.x, y:hft+(railTop+0.22)/2, z:q.z, dx:0.32, dy:railTop+0.22, dz:0.32, tier:tier});
+        add('railpost','box',{x:q.x, y:hft+railTop+0.28, z:q.z, dx:0.46, dy:0.11, dz:0.46, tier:tier, m:{cap:true}});
+      }
+      const nBal = Math.floor(len/0.38);
+      for (let b2=1;b2<nBal;b2++){
+        const q = P(sg.a + b2*(len/nBal));
+        add('baluster','box',{x:q.x, y:hft+botY+0.06+(railTop-0.56)/2, z:q.z, dx:0.09, dy:railTop-0.56, dz:0.09, tier:tier});
+      }
+    });
+  }
+
+  // one straight flight descending +z in LOCAL stair frame; caller places via {sx,sz,rotY}
+  function flight(tier, T, n, rise, sw, yTop, cx, z0, dir, railOn){
+    const runL = 11/12;
+    const runT = n*runL, drop = n*rise;
+    // stringers @ <=18" apart across the width
+    const nStr = Math.max(2, Math.ceil(sw*12/18)+1);
+    const slope = Math.sqrt(runT*runT + drop*drop);
+    const ang = Math.atan2(drop, runT) * dir;
+    for (let s2=0;s2<nStr;s2++){
+      const sxo = cx - sw/2 + 0.08 + s2*((sw-0.16)/(nStr-1));
+      T.push({t:'stringer', sh:'box', lx:sxo, ly:yTop - drop/2 - 0.42, lz:z0 + dir*runT/2,
+        dx:0.13, dy:0.62, dz:slope, rotX:-ang, tier:tier, m:{}});
+    }
+    for (let st=0; st<n; st++){
+      T.push({t:'tread', sh:'box', lx:cx, ly:yTop - rise*(st+1) + rise/2, lz:z0 + dir*(runL/2 + st*runL),
+        dx:sw, dy:(1/12)*1.4, dz:runL, tier:tier, m:{kind:'tread'}});
+      T.push({t:'tread', sh:'box', lx:cx, ly:yTop - rise*(st+1), lz:z0 + dir*(st*runL),
+        dx:sw, dy:rise, dz:0.1, tier:tier, m:{kind:'riser'}});
+    }
+    if (railOn){
+      [cx - sw/2, cx + sw/2].forEach(function(hx){
+        [2.85, 0.35].forEach(function(hy){
+          T.push({t:'rail', sh:'box', lx:hx, ly:yTop - drop/2 + hy, lz:z0 + dir*runT/2,
+            dx:0.12, dy:0.12, dz:slope, rotX:ang, tier:tier, m:{pos:'stair'}});
+        });
+        const nB = Math.max(2, Math.floor(runT/0.38));
+        for (let k=1;k<nB;k++){
+          const bz = k*(runT/nB);
+          T.push({t:'baluster', sh:'box', lx:hx, ly:yTop - drop*(bz/runT) + 0.42 + 1.19, lz:z0 + dir*bz,
+            dx:0.08, dy:2.38, dz:0.08, tier:tier, m:{}});
+        }
+      });
+    }
+  }
+  // full stair assembly off one platform edge in local frame, then transformed to world
+  function stairs(tier, wF, dF, hIn, sp, railOn, ox, oz){
+    const risers = Math.max(2, Math.ceil(hIn/7.5));
+    const hft = hIn/12, rise = hft/risers, runL = 11/12, sw = sp.sw;
+    const ron = railOn && hIn > 30;
+    const swb = risers > 12;
+    const T = [];   // local components with lx/ly/lz
+    // stair header: doubled member across the opening at the deck edge
+    T.push({t:'stairhdr', sh:'box', lx:0, ly:hft-0.36, lz:-0.10, dx:sw+0.5, dy:0.62, dz:0.13, tier:tier, m:{plies:2}});
+    T.push({t:'stairhdr', sh:'box', lx:0, ly:hft-0.36, lz:-0.24, dx:sw+0.5, dy:0.62, dz:0.13, tier:tier, m:{plies:2}});
+    if (!swb){
+      flight(tier, T, risers, rise, sw, hft, 0, 0, 1, ron);
+      [-(sw/2-0.45), sw/2-0.45].forEach(function(fx){
+        T.push({t:'footing', sh:'cyl', lx:fx, ly:0.11, lz:risers*runL - 0.4, r:0.34, len:0.22, tier:tier, m:{dia:8, kind:'sono'}});
+      });
+      if (ron) [-sw/2, sw/2].forEach(function(hx){
+        T.push({t:'railpost', sh:'box', lx:hx, ly:1.47, lz:risers*runL - 0.1, dx:0.2, dy:2.95, dz:0.2, tier:tier, m:{}});
+      });
+    } else {
+      const n1 = Math.ceil(risers/2), n2 = risers - n1;
+      const len1 = n1*runL, Ld = Math.max(3, sw);
+      const yLand = hft - n1*rise;
+      const ex = sp.ext || 1;
+      flight(tier, T, n1, rise, sw, hft, 0, 0, 1, ron);
+      // landing platform on 4 posts with sonotube pads
+      T.push({t:'decking', sh:'box', lx:ex*sw/2, ly:yLand, lz:len1 + Ld/2, dx:2*sw, dy:2/12, dz:Ld, tier:tier, m:{landing:true}});
+      T.push({t:'stairhdr', sh:'box', lx:ex*sw/2, ly:yLand - 0.32, lz:len1 + 0.1, dx:2*sw, dy:0.55, dz:0.16, tier:tier, m:{plies:1, landing:true}});
+      [ex*sw/2 - sw + 0.25, ex*sw/2 + sw - 0.25].forEach(function(px){
+        [len1 + 0.25, len1 + Ld - 0.25].forEach(function(pz){
+          T.push({t:'post', sh:'box', lx:px, ly:yLand/2, lz:pz, dx:0.4, dy:Math.max(0.4, yLand - 0.05), dz:0.4, tier:tier, m:{landing:true}});
+          T.push({t:'hw', sh:'box', lx:px, ly:0.27, lz:pz, dx:0.46, dy:0.07, dz:0.46, tier:tier, m:{kind:'postbase'}});
+          T.push({t:'footing', sh:'cyl', lx:px, ly:0.11, lz:pz, r:0.34, len:0.22, tier:tier, m:{dia:8, kind:'sono'}});
+        });
+      });
+      if (ron && yLand > 2.5){
+        // landing guards: far edge + both sides (rails + balusters + corner posts)
+        const guard = function(len, cxg, czg, alongX){
+          if (alongX){
+            T.push({t:'rail', sh:'box', lx:cxg, ly:yLand+2.9, lz:czg, dx:len, dy:0.15, dz:0.22, tier:tier, m:{pos:'top'}});
+            T.push({t:'rail', sh:'box', lx:cxg, ly:yLand+0.4, lz:czg, dx:len, dy:0.10, dz:0.16, tier:tier, m:{pos:'bottom'}});
+            const nB = Math.floor(len/0.38);
+            for (let k=1;k<nB;k++) T.push({t:'baluster', sh:'box', lx:cxg - len/2 + k*(len/nB), ly:yLand + 0.45 + 1.15, lz:czg, dx:0.08, dy:2.3, dz:0.08, tier:tier, m:{}});
+          } else {
+            T.push({t:'rail', sh:'box', lx:cxg, ly:yLand+2.9, lz:czg, dx:0.22, dy:0.15, dz:len, tier:tier, m:{pos:'top'}});
+            T.push({t:'rail', sh:'box', lx:cxg, ly:yLand+0.4, lz:czg, dx:0.16, dy:0.10, dz:len, tier:tier, m:{pos:'bottom'}});
+            const nB = Math.floor(len/0.38);
+            for (let k=1;k<nB;k++) T.push({t:'baluster', sh:'box', lx:cxg, ly:yLand + 0.45 + 1.15, lz:czg - len/2 + k*(len/nB), dx:0.08, dy:2.3, dz:0.08, tier:tier, m:{}});
+          }
+        };
+        guard(2*sw, ex*sw/2, len1 + Ld - 0.12, true);
+        guard(Ld, ex*(sw/2 + sw) - ex*0.12, len1 + Ld/2, false);
+        guard(Ld, -ex*sw/2 + ex*0.12, len1 + Ld/2, false);
+        [[ex*sw/2 - sw + 0.16, len1 + Ld - 0.16],[ex*sw/2 + sw - 0.16, len1 + Ld - 0.16],[ex*(sw/2 + sw) - ex*0.16, len1 + 0.16],[-ex*sw/2 + ex*0.16, len1 + 0.16]].forEach(function(pp){
+          T.push({t:'railpost', sh:'box', lx:pp[0], ly:yLand + 1.55, lz:pp[1], dx:0.3, dy:3.1, dz:0.3, tier:tier, m:{}});
+          T.push({t:'railpost', sh:'box', lx:pp[0], ly:yLand + 3.15, lz:pp[1], dx:0.42, dy:0.1, dz:0.42, tier:tier, m:{cap:true}});
+        });
+      }
+      // return flight beside the first, descending back toward the deck face
+      flight(tier, T, n2, rise, sw, yLand, ex*sw, len1, -1, ron);
+      [ex*sw - (sw/2-0.45), ex*sw + (sw/2-0.45)].forEach(function(fx){
+        T.push({t:'footing', sh:'cyl', lx:fx, ly:0.11, lz:len1 - n2*runL + 0.4, r:0.34, len:0.22, tier:tier, m:{dia:8, kind:'sono'}});
+      });
+      if (ron) [ex*sw - sw/2, ex*sw + sw/2].forEach(function(hx){
+        T.push({t:'railpost', sh:'box', lx:hx, ly:1.47, lz:len1 - n2*runL + 0.1, dx:0.2, dy:2.95, dz:0.2, tier:tier, m:{}});
+      });
+    }
+    // transform local -> world: edge determines origin + rotY
+    let px, pz, rotY;
+    if (sp.edge === 'front'){ px = ox + sp.c; pz = oz + dF/2; rotY = 0; }
+    else if (sp.edge === 'left'){ px = ox - wF/2; pz = oz + sp.c; rotY = -Math.PI/2; }
+    else { px = ox + wF/2; pz = oz + sp.c; rotY = Math.PI/2; }
+    const cosr = Math.cos(rotY), sinr = Math.sin(rotY);
+    T.forEach(function(q){
+      const wx = px + q.lx*cosr + q.lz*sinr;
+      const wz = pz - q.lx*sinr + q.lz*cosr;
+      add(q.t, q.sh, {x:wx, y:q.ly, z:wz, dx:q.dx, dy:q.dy, dz:q.dz, r:q.r, len:q.len,
+        rotX:q.rotX, rotY:rotY, tier:q.tier, m:q.m, stair:true});
+    });
+  }
+
+  // ---- assemble ----
+  const hft = S.h/12;
+  if (!c.tier2){
+    const rows = S.ledger ? [{z:S.d/2-1.5}] : [{z:S.d/2-1.5},{z:-S.d/2+1.5}];
+    if (c.needMid) rows.push({z: S.ledger ? -0.75 : 0});
+    rows.forEach(function(r){ r.footR=c.dia/24; r.per=c.perRow; r.dia=c.dia; });
+    platform(1, S.w, S.d, hft, c, {ox:0, oz:0, attached:S.ledger, rows:rows, jExt:0});
+    const sp = stairPlace();
+    if (S.rail) railing(1, S.w, S.d, hft, sp, !S.ledger, 0, 0);
+    if (S.stairs && sp) stairs(1, S.w, S.d, S.h, sp, S.rail, 0, 0);
+  } else {
+    const hft2 = c.h2e/12, tg = c.tg;
+    const rowsU = S.ledger ? [{z:S.d/2-1.5, shared:true}] : [{z:S.d/2-1.5, shared:true},{z:-S.d/2+1.5}];
+    if (c.up.needMid) rowsU.push({z: S.ledger ? -0.75 : 0});
+    rowsU.forEach(function(r){
+      r.per = r.shared ? c.sharedPer : c.up.perRow;
+      r.dia = r.shared ? c.sharedDia : c.up.dia;
+      r.footR = r.dia/24;
+    });
+    platform(1, S.w, S.d, hft, c.up, {ox:0, oz:0, attached:S.ledger, rows:rowsU, jExt:0});
+    const cutU = c.tierRisers > 0 ? {edge:'front', c:tg.tierC, sw:tg.tierSw} : null;
+    if (S.rail) railing(1, S.w, S.d, hft, cutU, !S.ledger, 0, 0);
+    if (c.tierRisers > 0){
+      const spT = {edge:'front', c:tg.tierC, sw:tg.tierSw, ext:1};
+      // tier stair descends from upper edge onto the lower surface (no footings/sono at a deck landing)
+      const before = C.length;
+      stairs(1, S.w, S.d, S.h - c.h2e, spT, S.rail && c.tierRisers >= 3, 0, 0);
+      // lift the tier flight so its base lands on the lower deck surface, drop its ground footings
+      for (let i=C.length-1; i>=before; i--){
+        const q = C[i];
+        if (q.t==='footing'){ C.splice(i,1); continue; }
+        q.y += hft2;
+      }
+    }
+    // lower tier: joists reach back 1 ft to a girder bolted on the shared posts
+    const rowsL = [{z:S.d2/2-1.5, per:c.lo.perRow, dia:c.lo.dia, footR:c.lo.dia/24},
+                   {z:-S.d2/2-1.0, noPosts:true, m:{shared:true}}];
+    if (c.lo.needMid) rowsL.push({z:-1.5, per:c.lo.perRow, dia:c.lo.dia, footR:c.lo.dia/24});
+    platform(2, S.w2, S.d2, hft2, c.lo, {ox:tg.cx2, oz:S.d/2 + S.d2/2, attached:false, rows:rowsL, jExt:1});
+    if (S.rail) railing(2, S.w2, S.d2, hft2, c.gsp, false, tg.cx2, S.d/2 + S.d2/2);
+    if (S.stairs && c.gsp) stairs(2, S.w2, S.d2, c.h2e, c.gsp, S.rail, tg.cx2, S.d/2 + S.d2/2);
+  }
+
+  // model-derived counts (single source shared by takeoff + legend; drawings project the same list)
+  const n = function(t, f){ return C.filter(function(q){ return q.t===t && (!f || f(q)); }).length; };
+  const counts = {
+    footingsMain: n('footing', function(q){ return q.m.kind!=='sono'; }),
+    footingsSono: n('footing', function(q){ return q.m.kind==='sono'; }),
+    posts: n('post', function(q){ return !q.m.landing; }),
+    landingPosts: n('post', function(q){ return q.m.landing; }),
+    joists: n('joist', function(q){ return !q.m.rim && q.tier===1; }),
+    joistsLo: n('joist', function(q){ return !q.m.rim && q.tier===2; }),
+    blocking: n('blocking'),
+    beams: n('beam'),
+    stringers: n('stringer'),
+    hangers: n('hw', function(q){ return q.m.kind==='hanger'; }),
+    holddowns: n('hw', function(q){ return q.m.kind==='holddown'; }),
+    postbases: n('hw', function(q){ return q.m.kind==='postbase'; }),
+    balusters: n('baluster'),
+    railposts: n('railpost', function(q){ return !q.m.cap; }),
+    fasciaLF: Math.round(C.filter(function(q){ return q.t==='fascia'; }).reduce(function(a,q){ return a + Math.max(q.dx,q.dz); },0)),
+    flashingLF: Math.round(C.filter(function(q){ return q.t==='flashing'; }).reduce(function(a,q){ return a + q.dx; },0)),
+    treads: n('tread', function(q){ return q.m.kind==='tread'; })
+  };
+  // footings grouped by diameter for the takeoff line
+  const diaMap = {};
+  C.forEach(function(q){ if (q.t==='footing' && q.m.kind!=='sono'){ diaMap[q.m.dia] = (diaMap[q.m.dia]||0)+1; } });
+  counts.footStr = Object.keys(diaMap).sort(function(a,b){ return b-a; })
+    .map(function(k){ return diaMap[k]+' @ '+k+'"'; }).join(' + ');
+  return {C:C, c:c, counts:counts};
+}
+let MODEL = null;
+function model(){ if (!MODEL) MODEL = resolve(); return MODEL; }
+function modelDirty(){ MODEL = null; }
+// model queries used by the 2D views (projection helpers)
+const MQ = {
+  joistXs: function(tier){ return model().C.filter(function(q){ return q.t==='joist' && !q.m.rim && !q.stair && q.tier===tier; }).map(function(q){ return q.x; }); },
+  beamZs:  function(tier){ return model().C.filter(function(q){ return q.t==='beam' && q.tier===tier && !q.m.shared; }).map(function(q){ return q.z; }); },
+  postsAt: function(tier, z){ return model().C.filter(function(q){ return q.t==='post' && !q.m.landing && q.tier===tier && Math.abs(q.z-z)<0.3; }).map(function(q){ return q.x; }); },
+  blockZs: function(tier){ const zs={}; model().C.forEach(function(q){ if (q.t==='blocking' && q.tier===tier) zs[Math.round(q.z*4)/4]=1; }); return Object.keys(zs).map(Number); },
+  footDia: function(tier){ const f=model().C.find(function(q){ return q.t==='footing' && q.m.kind!=='sono' && q.tier===tier; }); return f ? f.m.dia : 16; }
+};
+
+// ---------- takeoff panel (counts derived from the resolved model) ----------
+function renderTakeoff(){
+  const md = model(), c = md.c, K = md.counts;
   let rows, note;
+  const hwStr = K.hangers ? K.hangers+' hangers / '+K.postbases+' post bases'+(K.holddowns?' / '+K.holddowns+' hold-downs':'') : K.postbases+' post bases';
   if (!c.tier2){
     rows = [
       ['Deck area', c.area+' sq ft'],
-      ['Joists', c.joists+' @ '+c.jsize+' / '+S.spacing+'" OC'+(c.needMid?' / 2 spans':'')],
+      ['Joists', K.joists+' @ '+c.jsize+' / '+S.spacing+'" OC'+(c.needMid?' / 2 spans':'')],
       ['Girder'+(c.beamRows>1?'s':''), c.beamRows+' x (3)2x10 typ'],
-      ['Posts 6x6 PT', c.footings],
-      ['Footings', c.footings+' @ '+c.dia+'" dia'],
-      ['Footing depth', 'per township (30\u201336" typ)'],
+      ['Blocking', K.blocking ? K.blocking+' pcs @ mid-span' : 'not req’d at this span'],
+      ['Posts 6x6 PT', K.posts + (K.landingPosts ? ' + '+K.landingPosts+' landing' : '')],
+      ['Footings', K.footingsMain+' @ '+c.dia+'" dia'],
+      ['Footing depth', 'per township (30–36" typ)'],
       ['Decking', '~'+c.deckLF+' LF (5-1/2" bd)'],
+      ['Fascia', '~'+K.fasciaLF+' LF'],
     ];
-    if (S.ledger) rows.splice(6, 0, ['Ledger', c.jsize+' PT / lags 16" OC']);
+    if (S.ledger) rows.splice(7, 0, ['Ledger', c.jsize+' PT / lags 16" OC'], ['Flashing', '~'+K.flashingLF+' LF at ledger']);
+    rows.push(['Hardware', hwStr]);
     if (S.rail) rows.push(['Railing', '~'+c.railLF+' LF']);
-    if (S.stairs){ const sp2 = stairPlace(); rows.push(['Stairs', (sp2 ? sp2.sw : S.stairW)+"' wide / "+c.risers+' risers'+(c.swb?' / switchback':'')]); }
-    if (S.stairs) rows.push(['Stair footings', '8" dia sonotube'+(c.swb?' / landing on 4 posts':'')]);
+    if (S.stairs){ const sp2 = stairPlace(); rows.push(['Stairs', (sp2 ? sp2.sw : S.stairW)+"' wide / "+c.risers+' risers / '+K.stringers+' stringers'+(c.swb?' / switchback':'')]); }
+    if (S.stairs) rows.push(['Stair footings', K.footingsSono+' @ 8" dia sonotube']);
     rows.push(['Guards', c.guardReq ? 'REQUIRED (>30")' : 'not required']);
-    if (S.h >= 72) rows.push(['Post bracing', 'knee braces req\u2019d']);
-    if (S.ledger) rows.push(['Lateral ties', '2 hold-downs @ 1,500 lb']);
+    if (S.h >= 72) rows.push(['Post bracing', 'knee braces req’d']);
     note = (c.swb ? 'Over 12 risers: mid landing added, stair shown as a standard switchback. ' : '')
       + (c.needMid ? 'Second girder row added: joist span is past the 2x10 table. ' : '')
       + (c.spliced ? 'Girder spliced over posts for stock length. ' : '')
-      + (S.h >= 72 ? 'Posts over 6 ft get diagonal knee bracing \u2014 final bracing in the drawings. ' : '')
-      + (S.ledger ? 'Attached decks get (2) lateral-load hold-downs near the deck edges per the IRC deck provisions \u2014 located in your permit set. ' : '');
+      + (S.h >= 72 ? 'Posts over 6 ft get diagonal knee bracing — final bracing in the drawings. ' : '')
+      + (S.ledger ? 'Attached decks get (2) lateral-load hold-downs near the deck edges per the IRC deck provisions — located in your permit set. ' : '');
   } else {
     rows = [
       ['Deck area', c.area+' sq ft / 2 tiers'],
-      ['Upper joists', c.up.joists+' @ '+c.up.jsize+' / '+S.spacing+'" OC'+(c.up.needMid?' / 2 spans':'')],
-      ['Lower joists', c.lo.joists+' @ '+c.lo.jsize+' / '+S.spacing+'" OC'+(c.lo.needMid?' / 2 spans':'')],
-      ['Girders', c.girderMembers+' x (3)2x10 typ'],
-      ['Posts 6x6 PT', c.footTotal],
-      ['Footings', footStr(c)],
-      ['Footing depth', 'per township (30\u201336" typ)'],
+      ['Upper joists', K.joists+' @ '+c.up.jsize+' / '+S.spacing+'" OC'+(c.up.needMid?' / 2 spans':'')],
+      ['Lower joists', K.joistsLo+' @ '+c.lo.jsize+' / '+S.spacing+'" OC'+(c.lo.needMid?' / 2 spans':'')],
+      ['Girders', K.beams+' x (3)2x10 typ'],
+      ['Blocking', K.blocking ? K.blocking+' pcs @ mid-span' : 'not req’d at this span'],
+      ['Posts 6x6 PT', K.posts + (K.landingPosts ? ' + '+K.landingPosts+' landing' : '')],
+      ['Footings', K.footStr],
+      ['Footing depth', 'per township (30–36" typ)'],
       ['Decking', '~'+c.deckLF+' LF (5-1/2" bd)'],
+      ['Fascia', '~'+K.fasciaLF+' LF'],
     ];
-    if (S.ledger) rows.splice(7, 0, ['Ledger', c.up.jsize+' PT / lags 16" OC']);
+    if (S.ledger) rows.splice(8, 0, ['Ledger', c.up.jsize+' PT / lags 16" OC'], ['Flashing', '~'+K.flashingLF+' LF at ledger']);
+    rows.push(['Hardware', hwStr]);
     if (S.rail) rows.push(['Railing', '~'+c.railLF+' LF']);
     if (c.tierRisers > 0) rows.push(['Tier stair', c.tg.tierSw+"' wide / "+c.tierRisers+' risers']);
-    if (S.stairs && c.gsp) rows.push(['Grade stair', c.gsp.sw+"' wide / "+c.gradeRisers+' risers'+(c.swb?' / switchback':'')]);
-    if (S.stairs) rows.push(['Stair footings', '8" dia sonotube'+(c.swb?' / landing on 4 posts':'')]);
+    if (S.stairs && c.gsp) rows.push(['Grade stair', c.gsp.sw+"' wide / "+c.gradeRisers+' risers / '+K.stringers+' stringers'+(c.swb?' / switchback':'')]);
+    if (S.stairs) rows.push(['Stair footings', K.footingsSono+' @ 8" dia sonotube']);
     rows.push(['Guards', c.guardReq ? 'REQUIRED (>30")' : (c.guardLo ? 'REQUIRED on lower (>30")' : 'not required')]);
-    if (S.h >= 72) rows.push(['Post bracing', 'knee braces req\u2019d']);
-    if (S.ledger) rows.push(['Lateral ties', '2 hold-downs @ 1,500 lb']);
+    if (S.h >= 72) rows.push(['Post bracing', 'knee braces req’d']);
     note = 'Lower tier hangs on the upper girder posts: shared row runs '+c.sharedPer+' posts on '+c.sharedDia+'" footings. '
-      + (S.h >= 72 ? 'Posts over 6 ft get diagonal knee bracing \u2014 final bracing in the drawings. ' : '')
-      + (S.ledger ? 'Attached decks get (2) lateral-load hold-downs near the deck edges per the IRC deck provisions \u2014 located in your permit set. ' : '')
+      + (S.h >= 72 ? 'Posts over 6 ft get diagonal knee bracing — final bracing in the drawings. ' : '')
+      + (S.ledger ? 'Attached decks get (2) lateral-load hold-downs near the deck edges per the IRC deck provisions — located in your permit set. ' : '')
       + (c.tierOver ? 'Tier stair run passes the lower edge at this depth: final stair layout is set in the drawings. ' : '')
       + (c.swb ? 'Grade stair over 12 risers: mid landing added, shown as a standard switchback. ' : '')
       + ((c.up.needMid || c.lo.needMid) ? 'Mid girder row added where the joist span runs past the 2x10 table. ' : '')
@@ -214,7 +546,7 @@ function renderTakeoff(){
     return '<div class="row"><span>'+r[0]+'</span><b class="'+(i<2?'hl':'')+'">'+r[1]+'</b></div>';
   }).join('') + '<p class="note">'
     + note
-    + 'Framing #2 SYP pressure-treated. Decking includes 12% waste (more for diagonal or picture-frame layouts). Footing depth is set by your township \u2014 most NJ towns run 30\u201336 in; your permit set uses your township\u2019s number. Footings sized for 1,500 psf soil. Planning numbers for pricing and visualization. Final sizes are set in your permit drawings.</p>';
+    + 'Hardware counts are placement counts — exact connector models, fasteners and schedules are specified in your permit set. Framing #2 SYP pressure-treated. Decking includes 12% waste (more for diagonal or picture-frame layouts). Footing depth is set by your township — most NJ towns run 30–36 in; your permit set uses your township’s number. Footings sized for 1,500 psf soil. Planning numbers for pricing and visualization. Final sizes are set in your permit drawings.</p>';
   document.getElementById('railNote').textContent = c.tier2
     ? (c.guardReq || c.guardLo ? 'Tier surfaces over 30 inches above grade: guards are required by code.' : 'Both tiers under 30 inches: guards optional in most towns.')
     : (c.guardReq
@@ -229,7 +561,7 @@ function takeoffText(){
     ? ('SANTINO DECK STUDIO takeoff\n'
     + 'Deck '+S.w+' ft x '+S.d+' ft, '+S.h+' in above grade, '+(S.ledger?'attached (ledger)':'freestanding')+'\n'
     + 'Joists '+c.joists+' @ '+c.jsize+' '+S.spacing+'in OC, Simpson hangers'+(c.needMid?' (2 spans, mid girder added)':'')+' / Girders '+c.beamRows+' x (3)2x10 typ'+(c.spliced?' (spliced over posts)':'')+'\n'
-    + 'Footings '+c.footings+' @ '+c.dia+'in dia, depth per township (30-36in typ)'+(S.ledger?' / Ledger '+c.jsize+' PT, lags 16in OC':'')+'\n'
+    + 'Footings '+model().counts.footingsMain+' @ '+c.dia+'in dia, depth per township (30-36in typ), blocking + hanger/hold-down placement per model'+(S.ledger?' / Ledger '+c.jsize+' PT, lags 16in OC':'')+'\n'
     + 'Decking ~'+c.deckLF+' LF incl 12% waste'+(S.rail?' / Railing ~'+c.railLF+' LF':'')+(S.stairs?' / Stairs '+S.stairW+'ft wide, '+c.risers+' risers'+(c.swb?', switchback w/ mid landing':''):'')+'\n'
     + 'Quote: https://santinodrafting.com/#quote')
     : ('SANTINO DECK STUDIO takeoff (two tier)\n'
@@ -328,223 +660,116 @@ function buildHouse(grp, w, d, hft){
   box(0.08, winH, 0.075, M.ghostFrame, wx, hft+sill+winH/2, wallZ+0.04, grp, false);
   box(winW, 0.08, 0.075, M.ghostFrame, wx, hft+sill+winH/2, wallZ+0.04, grp, false);
 }
-// boards + rim + joists + girder rows with posts and footings, local to a deck center
-// rowSpecs: [{z, footR, noPosts}] / jExt stretches joists behind the back edge (lower tier reaching its shared girder)
-function buildFraming(grp, w, d, hft, rowSpecs, perRow, joists, jExt){
-  const t = 1/12;
-  const boardW = 0.46;
-  const nB = Math.floor(d/boardW);
-  for (let i=0;i<nB;i++){
-    box(w, t, boardW-0.06, (i%2 ? M.wood2 : M.wood), 0, hft, -d/2 + boardW/2 + i*boardW, grp);
-  }
-  box(w, 0.62, 0.13, M.frame, 0, hft-0.36, d/2-0.07, grp);
-  for (let j=0;j<joists;j++){
-    const x = -w/2 + j*(S.spacing/12);
-    if (x > w/2) break;
-    box(0.13, 0.62, d + (jExt||0), M.frame, Math.min(x, w/2-0.07), hft-0.36, -(jExt||0)/2, grp);
-  }
-  rowSpecs.forEach(function(rs){
-    box(w, 0.8, 0.42, M.post, 0, hft-0.85, rs.z, grp);
-    if (rs.noPosts) return;
-    const per = rs.per || perRow;
-    for (let p=0;p<per;p++){
-      const px = -w/2+1.5 + p*(Math.max(0.5,w-3)/(per-1));
-      box(0.5, Math.max(0.4,hft-1.2), 0.5, M.post, px, (hft-1.2)/2, rs.z, grp);
-      const foot = new THREE.Mesh(new THREE.CylinderGeometry(rs.footR,rs.footR,0.25,20), M.accent);
-      foot.position.set(px, 0.12, rs.z); foot.castShadow=true; grp.add(foot);
-    }
-  });
-}
-// railing: white vinyl, top + bottom rails post to post, balusters between rails
-// cut = one stair opening {edge, c, sw} or null
-function buildRails(grp, w, d, hft, cut, includeBack){
-  const railTop = 3.0, botY = 0.35;
-  const segs = [];
-  const addEdge = function(axis, at, L, cutHere){
-    const parts = cutHere
-      ? [{a:-L/2, b:cutHere.c - cutHere.sw/2}, {a:cutHere.c + cutHere.sw/2, b:L/2}]
-      : [{a:-L/2, b:L/2}];
-    parts.forEach(function(p){ if (p.b - p.a > 0.4) segs.push({axis:axis, at:at, a:p.a, b:p.b}); });
-  };
-  addEdge('x', d/2, w, (cut && cut.edge==='front') ? cut : null);
-  addEdge('z', -w/2, d, (cut && cut.edge==='left') ? cut : null);
-  addEdge('z', w/2, d, (cut && cut.edge==='right') ? cut : null);
-  if (includeBack) addEdge('x', -d/2, w, null);
-  segs.forEach(function(sg){
-    const len = sg.b - sg.a; if (len < 0.8) return;
-    const mid = (sg.a + sg.b)/2;
-    if (sg.axis==='x'){
-      box(len, 0.17, 0.26, M.vinyl, mid, hft+railTop-0.09, sg.at, grp);
-      box(len, 0.11, 0.19, M.vinyl, mid, hft+botY, sg.at, grp);
-    } else {
-      box(0.26, 0.17, len, M.vinyl, sg.at, hft+railTop-0.09, mid, grp);
-      box(0.19, 0.11, len, M.vinyl, sg.at, hft+botY, mid, grp);
-    }
-    const nP = Math.max(2, Math.ceil(len/6)+1);
-    for (let p=0;p<nP;p++){
-      const off = sg.a + p*(len/(nP-1));
-      const px = sg.axis==='x' ? off : sg.at;
-      const pz = sg.axis==='x' ? sg.at : off;
-      box(0.32, railTop+0.22, 0.32, M.vinyl, px, hft+(railTop+0.22)/2, pz, grp);
-      box(0.46, 0.11, 0.46, M.vinyl, px, hft+railTop+0.28, pz, grp);
-    }
-    const nBal = Math.floor(len/0.38);
-    for (let b2=1;b2<nBal;b2++){
-      const off = sg.a + b2*(len/nBal);
-      const px = sg.axis==='x' ? off : sg.at;
-      const pz = sg.axis==='x' ? sg.at : off;
-      box(0.09, railTop-0.56, 0.09, M.vinyl, px, hft+botY+0.06+(railTop-0.56)/2, pz, grp, false);
-    }
-  });
-}
-// one straight flight descending +z locally from yTop; rails and balusters when railOn
-function makeFlight(grp, n, rise, sw, yTop, cx, z0, dir, railOn){
-  const t = 1/12, runL = 11/12;
-  const runT = n*runL, drop = n*rise;
-  for (let st=0; st<n; st++){
-    box(sw, t*1.4, runL, M.wood, cx, yTop - rise*(st+1) + rise/2, z0 + dir*(runL/2 + st*runL), grp);
-    box(sw, rise, 0.1, M.frame, cx, yTop - rise*(st+1), z0 + dir*(st*runL), grp);
-  }
-  if (railOn){
-    const slope = Math.sqrt(runT*runT + drop*drop);
-    const ang = Math.atan2(drop, runT) * dir;
-    [cx - sw/2, cx + sw/2].forEach(function(hx){
-      [2.85, 0.35].forEach(function(hy){
-        const hr = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, slope), M.vinyl);
-        hr.position.set(hx, yTop - drop/2 + hy, z0 + dir*runT/2);
-        hr.rotation.x = ang; hr.castShadow = true; hr.receiveShadow = true; grp.add(hr);
-      });
-      const nB = Math.max(2, Math.floor(runT/0.38));
-      for (let k=1; k<nB; k++){
-        const bz = k*(runT/nB);
-        box(0.08, 2.38, 0.08, M.vinyl, hx, yTop - drop*(bz/runT) + 0.42 + 1.19, z0 + dir*bz, grp, false);
-      }
-    });
+// ---------- 3D: meshes are a straight projection of the model ----------
+const MAT = {
+  decking0: new THREE.MeshLambertMaterial({color:0xA98D68}),
+  decking1: new THREE.MeshLambertMaterial({color:0xA18360}),
+  frame:    new THREE.MeshLambertMaterial({color:0x74604B}),
+  post:     new THREE.MeshLambertMaterial({color:0x594939}),
+  vinyl:    new THREE.MeshLambertMaterial({color:0xF8F7F2}),
+  accent:   new THREE.MeshLambertMaterial({color:0xFF5A1F}),
+  fascia:   new THREE.MeshLambertMaterial({color:0x6E573F}),
+  flash:    new THREE.MeshLambertMaterial({color:0xC9CDD1}),
+  hw:       new THREE.MeshLambertMaterial({color:0x9AA0A6}),
+  hi:       new THREE.MeshLambertMaterial({color:0xFF5A1F, emissive:0xFF5A1F, emissiveIntensity:0.55})
+};
+function matFor(q){
+  switch(q.t){
+    case 'decking': return q.m.alt ? MAT.decking1 : MAT.decking0;
+    case 'tread':   return q.m.kind==='riser' ? MAT.frame : MAT.decking0;
+    case 'joist': case 'ledger': case 'blocking': case 'stairhdr': case 'stringer': return MAT.frame;
+    case 'beam': case 'post': return MAT.post;
+    case 'fascia': return MAT.fascia;
+    case 'flashing': return MAT.flash;
+    case 'hw': return MAT.hw;
+    case 'footing': return MAT.accent;
+    case 'railpost': case 'rail': case 'baluster': return MAT.vinyl;
+    default: return MAT.frame;
   }
 }
-// full stair assembly off one deck edge, to grade; switchback with mid landing past 12 risers
-function buildStairs(grp, wF, dF, hIn, sp, railOn){
-  const risers = Math.max(2, Math.ceil(hIn/7.5));
-  const hft = hIn/12;
-  const rise = hft/risers, runL = 11/12, sw = sp.sw;
-  const t = 1/12;
-  const ron = railOn && hIn > 30;
-  const sgp = new THREE.Group();
-  const swb = risers > 12;
-  if (!swb){
-    makeFlight(sgp, risers, rise, sw, hft, 0, 0, 1, ron);
-    [-(sw/2-0.45), sw/2-0.45].forEach(function(fx){
-      const sft = new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.34,0.22,16), M.accent);
-      sft.position.set(fx, 0.11, risers*runL - 0.4); sft.castShadow = true; sgp.add(sft);
-    });
-    if (ron){
-      [-sw/2, sw/2].forEach(function(hx){ box(0.2, 2.95, 0.2, M.vinyl, hx, 1.47, risers*runL - 0.1, sgp); });
-    }
-  } else {
-    const n1 = Math.ceil(risers/2), n2 = risers - n1;
-    const len1 = n1*runL, Ld = Math.max(3, sw);
-    const yLand = hft - n1*rise;
-    const ex = sp.ext || 1;
-    makeFlight(sgp, n1, rise, sw, hft, 0, 0, 1, ron);
-    // landing platform on 4 posts with sonotube pads
-    box(2*sw, t*2, Ld, M.wood, ex*sw/2, yLand, len1 + Ld/2, sgp);
-    box(2*sw, 0.55, 0.16, M.frame, ex*sw/2, yLand - 0.32, len1 + 0.1, sgp, false);
-    [ex*sw/2 - sw + 0.25, ex*sw/2 + sw - 0.25].forEach(function(px){
-      [len1 + 0.25, len1 + Ld - 0.25].forEach(function(pz){
-        box(0.4, Math.max(0.4, yLand - 0.05), 0.4, M.post, px, yLand/2, pz, sgp);
-        const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.34,0.22,16), M.accent);
-        foot.position.set(px, 0.11, pz); foot.castShadow = true; sgp.add(foot);
-      });
-    });
-    // landing guard: far edge + both side edges
-    if (ron && yLand > 2.5){
-      const guard = function(len, cxg, czg, alongX){
-        if (alongX){
-          box(len, 0.15, 0.22, M.vinyl, cxg, yLand + 2.9, czg, sgp);
-          box(len, 0.10, 0.16, M.vinyl, cxg, yLand + 0.4, czg, sgp);
-          const nB = Math.floor(len/0.38);
-          for (let k=1; k<nB; k++) box(0.08, 2.3, 0.08, M.vinyl, cxg - len/2 + k*(len/nB), yLand + 0.45 + 1.15, czg, sgp, false);
-        } else {
-          box(0.22, 0.15, len, M.vinyl, cxg, yLand + 2.9, czg, sgp);
-          box(0.16, 0.10, len, M.vinyl, cxg, yLand + 0.4, czg, sgp);
-          const nB = Math.floor(len/0.38);
-          for (let k=1; k<nB; k++) box(0.08, 2.3, 0.08, M.vinyl, cxg, yLand + 0.45 + 1.15, czg - len/2 + k*(len/nB), sgp, false);
-        }
-      };
-      guard(2*sw, ex*sw/2, len1 + Ld - 0.12, true);
-      guard(Ld, ex*(sw/2 + sw) - ex*0.12, len1 + Ld/2, false);
-      guard(Ld, -ex*sw/2 + ex*0.12, len1 + Ld/2, false);
-      [[ex*sw/2 - sw + 0.16, len1 + Ld - 0.16],[ex*sw/2 + sw - 0.16, len1 + Ld - 0.16],[ex*(sw/2 + sw) - ex*0.16, len1 + 0.16],[-ex*sw/2 + ex*0.16, len1 + 0.16]].forEach(function(pp){
-        box(0.3, 3.1, 0.3, M.vinyl, pp[0], yLand + 1.55, pp[1], sgp);
-        box(0.42, 0.1, 0.42, M.vinyl, pp[0], yLand + 3.15, pp[1], sgp);
-      });
-    }
-    // return flight beside the first, descending back toward the deck face
-    makeFlight(sgp, n2, rise, sw, yLand, ex*sw, len1, -1, ron);
-    [ex*sw - (sw/2-0.45), ex*sw + (sw/2-0.45)].forEach(function(fx){
-      const sft = new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.34,0.22,16), M.accent);
-      sft.position.set(fx, 0.11, len1 - n2*runL + 0.4); sft.castShadow = true; sgp.add(sft);
-    });
-    if (ron){
-      [ex*sw - sw/2, ex*sw + sw/2].forEach(function(hx){ box(0.2, 2.95, 0.2, M.vinyl, hx, 1.47, len1 - n2*runL + 0.1, sgp); });
-    }
-  }
-  if (sp.edge === 'front'){ sgp.position.set(sp.c, 0, dF/2); }
-  else if (sp.edge === 'left'){ sgp.position.set(-wF/2, 0, sp.c); sgp.rotation.y = -Math.PI/2; }
-  else { sgp.position.set(wF/2, 0, sp.c); sgp.rotation.y = Math.PI/2; }
-  grp.add(sgp);
-}
+const NO_SHADOW = {baluster:1, hw:1, flashing:1};
 function buildDeck(){
   if (deckGroup) scene.remove(deckGroup);
   deckGroup = new THREE.Group();
-  const w=S.w, d=S.d, hft=S.h/12;
-  const c = calc();
-  if (S.ledger) buildHouse(deckGroup, w, d, hft);
-  if (!c.tier2){
-    const rows = S.ledger ? [d/2-1.5] : [d/2-1.5, -d/2+1.5];
-    if (c.needMid) rows.push(S.ledger ? -0.75 : 0);
-    const footR = c.dia/24;
-    buildFraming(deckGroup, w, d, hft, rows.map(function(z){ return {z:z, footR:footR}; }), c.perRow, c.joists, 0);
-    const sp = stairPlace();
-    if (S.rail) buildRails(deckGroup, w, d, hft, sp, !S.ledger);
-    if (S.stairs && sp) buildStairs(deckGroup, S.w, S.d, S.h, sp, S.rail);
-  } else {
-    const hft2 = c.h2e/12, w2 = S.w2, d2 = S.d2, tg = c.tg;
-    // upper tier: outer girder row is the shared row, footings upsized
-    const rowsU = S.ledger ? [d/2-1.5] : [d/2-1.5, -d/2+1.5];
-    if (c.up.needMid) rowsU.push(S.ledger ? -0.75 : 0);
-    buildFraming(deckGroup, w, d, hft,
-      rowsU.map(function(z){
-        const shared = (z === d/2-1.5);
-        return {z:z, footR:(shared ? c.sharedDia : c.up.dia)/24, per: shared ? c.sharedPer : c.up.perRow};
-      }),
-      c.up.perRow, c.up.joists, 0);
-    const cutU = c.tierRisers > 0 ? {edge:'front', c:tg.tierC, sw:tg.tierSw} : null;
-    if (S.rail) buildRails(deckGroup, w, d, hft, cutU, !S.ledger);
-    // tier stair from the upper edge down onto the lower surface
-    if (c.tierRisers > 0){
-      const riseT = (hft - hft2)/c.tierRisers;
-      const ron = S.rail && c.tierRisers >= 3;
-      const tgrp = new THREE.Group();
-      makeFlight(tgrp, c.tierRisers, riseT, tg.tierSw, hft, 0, 0, 1, ron);
-      if (ron){
-        [-tg.tierSw/2, tg.tierSw/2].forEach(function(hx){ box(0.2, 2.95, 0.2, M.vinyl, hx, hft2 + 1.47, c.tierRun - 0.1, tgrp); });
-      }
-      tgrp.position.set(tg.tierC, 0, d/2);
-      deckGroup.add(tgrp);
-    }
-    // lower tier: joists reach back to a second girder bolted on the shared posts
-    const lgrp = new THREE.Group();
-    const rowsL = [{z: d2/2-1.5, footR: c.lo.dia/24}, {z: -d2/2-1.5, footR: 0, noPosts: true}];
-    if (c.lo.needMid) rowsL.push({z: -1.5, footR: c.lo.dia/24});
-    buildFraming(lgrp, w2, d2, hft2, rowsL, c.lo.perRow, c.lo.joists, 1);
-    if (S.rail) buildRails(lgrp, w2, d2, hft2, c.gsp, false);
-    if (S.stairs && c.gsp) buildStairs(lgrp, w2, d2, c.h2e, c.gsp, S.rail);
-    lgrp.position.set(tg.cx2, 0, d/2 + d2/2);
-    deckGroup.add(lgrp);
-  }
+  const md = model();
+  if (S.ledger) buildHouse(deckGroup, S.w, S.d, S.h/12);
+  md.C.forEach(function(q){
+    let g;
+    if (q.sh === 'cyl') g = new THREE.CylinderGeometry(q.r, q.r, q.len, 20);
+    else g = new THREE.BoxGeometry(q.dx, q.dy, q.dz);
+    const mesh = new THREE.Mesh(g, matFor(q));
+    mesh.position.set(q.x, q.y, q.z);
+    if (q.rotX) mesh.rotation.x = q.rotX;
+    if (q.rotY) mesh.rotation.y = q.rotY;
+    if (q.rotX && q.rotY){ mesh.rotation.order = 'YXZ'; }
+    mesh.castShadow = !NO_SHADOW[q.t]; mesh.receiveShadow = true;
+    mesh.userData.t = q.t;
+    deckGroup.add(mesh);
+  });
   deckGroup.position.y = 0.01;
   scene.add(deckGroup);
+  legendSync();
+}
+// ---------- numbered parts legend (names + counts only; specs live in the permit set) ----------
+let legFlashT = null;
+function legendCounts(){
+  const md = model(), by = {};
+  md.C.forEach(function(q){ by[q.t] = (by[q.t]||0) + 1; });
+  // count what reads naturally per part (pieces), collapse caps/risers into their parts
+  const adj = Object.assign({}, by);
+  if (adj.railpost) adj.railpost = md.counts.railposts;
+  if (adj.tread) adj.tread = md.counts.treads;
+  if (adj.hw) adj.hw = md.counts.hangers + md.counts.holddowns + md.counts.postbases;
+  return adj;
+}
+function legendSync(){
+  const el = document.getElementById('ds-legend-list');
+  if (!el) return;
+  const by = legendCounts();
+  el.innerHTML = PARTS.map(function(pp){
+    const n2 = by[pp.t] || 0;
+    if (!n2) return '';
+    return '<div class="ds-leg-row" data-t="'+pp.t+'"><span class="ds-leg-n">'+pp.p+'</span>'
+      + '<span class="ds-leg-name">'+pp.name+'</span><span class="ds-leg-ct">'+n2+'</span></div>';
+  }).join('');
+}
+function legendFlash(t){
+  if (!deckGroup) return;
+  if (legFlashT) clearTimeout(legFlashT);
+  deckGroup.traverse(function(o){ if (o.isMesh && o.userData.saved){ o.material = o.userData.saved; delete o.userData.saved; } });
+  deckGroup.traverse(function(o){ if (o.isMesh && o.userData.t === t){ o.userData.saved = o.material; o.material = MAT.hi; } });
+  legFlashT = setTimeout(function(){
+    deckGroup.traverse(function(o){ if (o.isMesh && o.userData.saved){ o.material = o.userData.saved; delete o.userData.saved; } });
+  }, 1400);
+}
+function legendInit(){
+  if (document.getElementById('ds-legend')) return;
+  const st = document.createElement('style');
+  st.textContent = '#ds-legend{position:absolute;top:8px;right:8px;z-index:7;font-family:"IBM Plex Mono",ui-monospace,monospace;max-width:230px}'
+    + '#ds-legend .ds-leg-head{background:#0C0E11;color:#F2EFE7;border:2px solid #0C0E11;padding:6px 10px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;cursor:pointer;text-align:right;user-select:none}'
+    + '#ds-legend-list{display:none;background:#F2EFE7;border:2px solid #0C0E11;border-top:none;max-height:330px;overflow-y:auto}'
+    + '#ds-legend.open #ds-legend-list{display:block}'
+    + '.ds-leg-row{display:flex;align-items:center;gap:7px;padding:4px 9px;font-size:10.5px;border-bottom:1px solid rgba(12,14,17,.18);cursor:pointer}'
+    + '.ds-leg-row:hover{background:#0C0E11;color:#F2EFE7}'
+    + '.ds-leg-n{flex:none;width:16px;height:16px;border:1.5px solid currentColor;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:600}'
+    + '.ds-leg-name{flex:1}'
+    + '.ds-leg-ct{opacity:.65;font-weight:600}'
+    + '.ds-leg-note{padding:6px 9px;font-size:8.5px;letter-spacing:.06em;opacity:.6;text-transform:uppercase}'
+    + '@media (max-width:640px){#ds-legend{max-width:190px}#ds-legend-list{max-height:210px}}';
+  document.head.appendChild(st);
+  const el = document.createElement('div');
+  el.id = 'ds-legend';
+  el.innerHTML = '<div class="ds-leg-head">Parts &#9662;</div><div id="ds-legend-list"></div>';
+  document.getElementById('three-wrap').parentElement.appendChild(el);
+  el.querySelector('.ds-leg-head').addEventListener('click', function(){ el.classList.toggle('open'); });
+  el.addEventListener('click', function(e){
+    const row = e.target.closest('.ds-leg-row');
+    if (row) legendFlash(row.getAttribute('data-t'));
+  });
+  const note = document.createElement('div');
+  note.className = 'ds-leg-note';
+  note.textContent = 'Sizes + connections detailed in your 18x24 permit set';
+  el.appendChild(note);
 }
 
 // minimal orbit control
@@ -657,33 +882,40 @@ function renderPlan(){
     s += '<text x="'+(x0+dw/2)+'" y="'+(y0+dd*0.5+2)+'" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#0C0E11">'+dl2+'</text>';
   }
   // joists (framing mode)
-  const nJ = c.joists;
-  if (MODE==='framing') for (let j=0;j<nJ;j++){
-    let jx = x0 + j*(S.spacing/12)*sc;
-    if (jx > x0+dw) break;
+  const jxsM = MQ.joistXs(1).map(function(mx){ return x0 + (mx + S.w/2)*sc; });
+  if (MODE==='framing') jxsM.forEach(function(jx){
+    if (jx > x0+dw+1) return;
     const jhw = Math.max(1.2, 0.0625*sc);
     s += '<line x1="'+(jx-jhw)+'" y1="'+y0+'" x2="'+(jx-jhw)+'" y2="'+(y0+dd)+'" stroke="#0C0E11" stroke-width="0.6" opacity="0.6"/>';
     s += '<line x1="'+(jx+jhw)+'" y1="'+y0+'" x2="'+(jx+jhw)+'" y2="'+(y0+dd)+'" stroke="#0C0E11" stroke-width="0.6" opacity="0.6"/>';
-  }
+    if (S.ledger) s += '<line x1="'+jx+'" y1="'+(y0+1.5)+'" x2="'+jx+'" y2="'+(y0+6)+'" stroke="#0C0E11" stroke-width="1.4" opacity="0.5"/>';
+  });
+  // blocking rows (from model): staggered dash between joist pairs
+  if (MODE==='framing') MQ.blockZs(1).forEach(function(zb){
+    const by2 = y0 + (zb + S.d/2)*sc;
+    for (let j2=0;j2<jxsM.length-1;j2++){
+      const bo = (j2%2 ? 3 : -3);
+      s += '<line x1="'+(jxsM[j2]+2)+'" y1="'+(by2+bo)+'" x2="'+(jxsM[j2+1]-2)+'" y2="'+(by2+bo)+'" stroke="#0C0E11" stroke-width="1.6" opacity="0.55"/>';
+    }
+  });
   // rim joist double line (framing)
   if (MODE==='framing'){
     s += '<rect x="'+(x0+3.5)+'" y="'+(y0+3.5)+'" width="'+(dw-7)+'" height="'+(dd-7)+'" fill="none" stroke="#0C0E11" stroke-width="0.9"/>';
   }
   // beams dashed + footings (framing mode)
-  const rowsZ = (MODE==='framing') ? (S.ledger ? [S.d/2-1.5] : [S.d/2-1.5, -S.d/2+1.5]) : [];
-  if (c.needMid) rowsZ.push(S.ledger ? -0.75 : 0);
+  const rowsZ = (MODE==='framing') ? MQ.beamZs(1) : [];
   const rows = rowsZ.map(function(z){ return y0 + (z + S.d/2)*sc; });
-  const fr9 = Math.max(7, Math.round(9 * c.dia/16));
-  rows.forEach(function(by){
+  const fr9 = Math.max(7, Math.round(9 * MQ.footDia(1)/16));
+  rowsZ.forEach(function(zRow){
+    const by = y0 + (zRow + S.d/2)*sc;
     s += '<line x1="'+(x0-6)+'" y1="'+(by-2.2)+'" x2="'+(x0+dw+6)+'" y2="'+(by-2.2)+'" stroke="#0C0E11" stroke-width="1.4" stroke-dasharray="10 5"/>';
     s += '<line x1="'+(x0-6)+'" y1="'+(by+2.2)+'" x2="'+(x0+dw+6)+'" y2="'+(by+2.2)+'" stroke="#0C0E11" stroke-width="1.4" stroke-dasharray="10 5"/>';
-    const per = Math.max(2, Math.ceil(Math.max(0.5,S.w-3)/6)+1);
-    for (let p=0;p<per;p++){
-      const px = x0+1.5*sc + p*((dw-3*sc)/(per-1));
+    const pxsRow = MQ.postsAt(1, zRow).map(function(mx){ return x0 + (mx + S.w/2)*sc; });
+    pxsRow.forEach(function(px){
       s += '<circle cx="'+px+'" cy="'+by+'" r="'+fr9+'" fill="none" stroke="#FF5A1F" stroke-width="2.5"/>';
       s += '<line x1="'+(px-fr9*0.7)+'" y1="'+(by-fr9*0.7)+'" x2="'+(px+fr9*0.7)+'" y2="'+(by+fr9*0.7)+'" stroke="#FF5A1F" stroke-width="1.6"/>';
       s += '<line x1="'+(px-fr9*0.7)+'" y1="'+(by+fr9*0.7)+'" x2="'+(px+fr9*0.7)+'" y2="'+(by-fr9*0.7)+'" stroke="#FF5A1F" stroke-width="1.6"/>';
-    }
+    });
   });
   // stairs
   let planSp = null, planSl = 0, planP = null;
@@ -818,9 +1050,9 @@ function renderPlan(){
   // post-spacing chain along the beam with centerline marks (his framing-plan signature)
   if (MODE==='framing'){
     const rowY = y0 + (S.d/2-1.5 + S.d/2)*sc;
-    const per2 = Math.max(2, Math.ceil(Math.max(0.5,S.w-3)/6)+1);
-    const pr2 = Math.max(0.5, S.w-3), psp2 = pr2/(per2-1);
-    const pxs = []; for (let i3=0;i3<per2;i3++){ pxs.push(x0 + (1.5 + i3*psp2)*sc); }
+    const pxmRow = MQ.postsAt(1, S.d/2-1.5);
+    const pxs = pxmRow.map(function(mx){ return x0 + (mx + S.w/2)*sc; });
+    const psp2 = pxmRow.length>1 ? (pxmRow[1] - pxmRow[0]) : 0;
     pxs.forEach(function(pxc){
       s += '<text x="'+pxc+'" y="'+(rowY-13)+'" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#0C0E11">&#8452;</text>';
     });
@@ -1348,6 +1580,7 @@ function syncField(id, val){
   if (el && document.activeElement !== el) el.value = val;
 }
 function refresh(){
+  modelDirty();
   syncField('inW', S.w); syncField('numW', S.w);
   syncField('inD', S.d); syncField('numD', S.d);
   syncField('inH', S.h); syncField('numH', S.h);
@@ -1359,7 +1592,7 @@ function refresh(){
   document.getElementById('stairWCtrl').style.display = S.stairs ? '' : 'none';
   document.getElementById('stairPosCtrl').style.display = S.stairs ? '' : 'none';
   document.querySelector('#stairPosCtrl label').textContent = S.tier2 ? 'Grade stair location (lower)' : 'Stair location';
-  renderTakeoff(); buildDeck(); renderView();
+  legendInit(); renderTakeoff(); buildDeck(); renderView();
 }
 function bindDim(rangeId, numId, key, lo, hi){
   document.getElementById(rangeId).addEventListener('input', function(e){
@@ -1422,6 +1655,8 @@ document.querySelectorAll('#segSpace button').forEach(function(b){
   });
 });
 function renderView(){
+  const lg = document.getElementById('ds-legend');
+  if (lg) lg.style.display = (S.view === '3d') ? '' : 'none';
   if (S.view==='framing' || S.view==='decking'){ S.planMode=S.view; renderPlan(); }
   else if (S.view==='elevF'){ renderElevation('front'); }
   else if (S.view==='elevS'){ renderElevation('side'); }
