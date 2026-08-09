@@ -1131,7 +1131,7 @@ function renderPlan(){
     s += '<text x="46" y="'+(H-26)+'" text-anchor="middle" font-family="IBM Plex Mono" font-weight="600" font-size="11" fill="#0C0E11">'+num+'</text>';
     s += '<text x="64" y="'+(H-26)+'" font-family="IBM Plex Mono" font-weight="600" font-size="12" letter-spacing="1" fill="#0C0E11">'+ttl+'</text>';
     s += '<line x1="64" y1="'+(H-19)+'" x2="'+(64+ttl.length*8.2+8)+'" y2="'+(H-19)+'" stroke="#0C0E11" stroke-width="1.4"/>';
-    s += '<text x="'+(64+ttl.length*8.2+22)+'" y="'+(H-26)+'" font-family="IBM Plex Mono" font-size="8.5" fill="#0C0E11" opacity="0.8">PERMIT SET DRAWN AT 1/4" = 1\'-0"</text>';
+    if (!MOB) s += '<text x="'+(64+ttl.length*8.2+22)+'" y="'+(H-26)+'" font-family="IBM Plex Mono" font-size="8.5" fill="#0C0E11" opacity="0.8">PERMIT SET DRAWN AT 1/4" = 1\'-0"</text>';
     s += '<text x="'+(W-20)+'" y="'+(H-26)+'" text-anchor="end" font-family="IBM Plex Mono" font-weight="600" font-size="8.5" fill="#FF5A1F">PRELIMINARY / NOT FOR CONSTRUCTION</text>';
   })();
   document.getElementById('plan-wrap').innerHTML =
@@ -1383,7 +1383,7 @@ function renderPlanTier2(c, W, H, m, availW, availH){
     s += '<text x="46" y="'+(H-26)+'" text-anchor="middle" font-family="IBM Plex Mono" font-weight="600" font-size="11" fill="#0C0E11">'+num+'</text>';
     s += '<text x="64" y="'+(H-26)+'" font-family="IBM Plex Mono" font-weight="600" font-size="12" letter-spacing="1" fill="#0C0E11">'+ttl+'</text>';
     s += '<line x1="64" y1="'+(H-19)+'" x2="'+(64+ttl.length*8.2+8)+'" y2="'+(H-19)+'" stroke="#0C0E11" stroke-width="1.4"/>';
-    s += '<text x="'+(64+ttl.length*8.2+22)+'" y="'+(H-26)+'" font-family="IBM Plex Mono" font-size="8.5" fill="#0C0E11" opacity="0.8">PERMIT SET DRAWN AT 1/4" = 1\'-0"</text>';
+    if (!MOB) s += '<text x="'+(64+ttl.length*8.2+22)+'" y="'+(H-26)+'" font-family="IBM Plex Mono" font-size="8.5" fill="#0C0E11" opacity="0.8">PERMIT SET DRAWN AT 1/4" = 1\'-0"</text>';
     s += '<text x="'+(W-20)+'" y="'+(H-26)+'" text-anchor="end" font-family="IBM Plex Mono" font-weight="600" font-size="8.5" fill="#FF5A1F">PRELIMINARY / NOT FOR CONSTRUCTION</text>';
   })();
   document.getElementById('plan-wrap').innerHTML =
@@ -1695,7 +1695,7 @@ function renderElevation(kind){
     s += '<text x="46" y="'+(H-20)+'" text-anchor="middle" font-family="IBM Plex Mono" font-weight="600" font-size="11" fill="#0C0E11">'+num+'</text>';
     s += '<text x="64" y="'+(H-20)+'" font-family="IBM Plex Mono" font-weight="600" font-size="12" letter-spacing="1" fill="#0C0E11">'+ttl+'</text>';
     s += '<line x1="64" y1="'+(H-13)+'" x2="'+(64+ttl.length*8.2+8)+'" y2="'+(H-13)+'" stroke="#0C0E11" stroke-width="1.4"/>';
-    s += '<text x="'+(64+ttl.length*8.2+22)+'" y="'+(H-20)+'" font-family="IBM Plex Mono" font-size="8.5" fill="#0C0E11" opacity="0.8">PERMIT SET DRAWN AT 1/4" = 1\'-0"</text>';
+    if (!MOB) s += '<text x="'+(64+ttl.length*8.2+22)+'" y="'+(H-20)+'" font-family="IBM Plex Mono" font-size="8.5" fill="#0C0E11" opacity="0.8">PERMIT SET DRAWN AT 1/4" = 1\'-0"</text>';
   })();
   try{ window.__dsDbg = {view:kind, stair:dbgStair, bounds:{x0:B.x0,y0:B.y0,x1:B.x1,y1:B.y1}}; }catch(e){}
   document.getElementById('plan-wrap').innerHTML =
