@@ -1056,6 +1056,16 @@ function renderPlan(){
       s += '<path d="M'+a2[0]+' '+a2[1]+' m-3.5 -6 l3.5 6 l3.5 -6 z" fill="#0C0E11"/>';
       const lc = P(swp/2, planSl + 13);
       s += '<text x="'+lc[0]+'" y="'+lc[1]+'" text-anchor="middle" font-family="IBM Plex Mono" font-size="9.5" fill="#0C0E11">DN</text>';
+      if (MODE==='decking' && S.rail){
+        // stair guard in plan: double rail line down each side, hollow newel squares at deck + bottom
+        const roS=Math.max(5,0.24*sc), rwS=Math.max(1.6,0.16*sc), psqS=Math.max(4,0.4*sc);
+        [roS, swp-roS].forEach(function(u){
+          tline(u-rwS/2, 0, u-rwS/2, planSl);
+          tline(u+rwS/2, 0, u+rwS/2, planSl);
+          [0, planSl].forEach(function(v){ const q=P(u,v);
+            s += '<rect x="'+(q[0]-psqS/2)+'" y="'+(q[1]-psqS/2)+'" width="'+psqS+'" height="'+psqS+'" fill="#F2EFE7" stroke="#0C0E11" stroke-width="1.3"/>'; });
+        });
+      }
     } else {
       const n1 = Math.ceil(risers/2), n2 = risers - n1;
       let run = (11/12)*sc, Ldp = Math.max(3, planSp.sw)*sc;
@@ -1388,6 +1398,16 @@ function renderPlanTier2(c, W, H, m, availW, availH){
       s += '<path d="M'+a2[0]+' '+a2[1]+' m-3.5 -6 l3.5 6 l3.5 -6 z" fill="#0C0E11"/>';
       const lc = P(swp/2, planSl + 13);
       s += '<text x="'+lc[0]+'" y="'+lc[1]+'" text-anchor="middle" font-family="IBM Plex Mono" font-size="9.5" fill="#0C0E11">DN</text>';
+      if (MODE==='decking' && S.rail){
+        // stair guard in plan: double rail line down each side, hollow newel squares at deck + bottom
+        const roS=Math.max(5,0.24*sc), rwS=Math.max(1.6,0.16*sc), psqS=Math.max(4,0.4*sc);
+        [roS, swp-roS].forEach(function(u){
+          tline(u-rwS/2, 0, u-rwS/2, planSl);
+          tline(u+rwS/2, 0, u+rwS/2, planSl);
+          [0, planSl].forEach(function(v){ const q=P(u,v);
+            s += '<rect x="'+(q[0]-psqS/2)+'" y="'+(q[1]-psqS/2)+'" width="'+psqS+'" height="'+psqS+'" fill="#F2EFE7" stroke="#0C0E11" stroke-width="1.3"/>'; });
+        });
+      }
     } else {
       const n1 = Math.ceil(risers/2), n2 = risers - n1;
       let run = (11/12)*sc, Ldp = Math.max(3, gsp.sw)*sc;
@@ -1725,10 +1745,30 @@ function renderElevation(kind){
     ln(sxL, topY, sxL, botY, 1.6); ln(sxR, topY, sxR, botY, 1.6);
     for (let r2=1; r2<risers; r2++){ const yy = topY + r2*((botY-topY)/risers); ln(sxL, yy, sxR, yy, 1); }
     if (RAILON){
-      [sxL, sxR].forEach(function(gx4){
-        rc(gx4-0.14*SV, topY-3.0*SV, 0.28*SV, (botY-8)-(topY-3.0*SV), 1.3, null, '#F2EFE7');
-        rc(gx4-0.185*SV, topY-3.0*SV-3.2, 0.37*SV, 3.2, 1.2, null, '#F2EFE7');
-        rc(gx4-0.215*SV, topY-3.0*SV-6.4, 0.43*SV, 3.2, 1.2, null, '#F2EFE7');
+      // stair guard shown as a raked rail (same cap/sub/bottom system as the deck + side elevation):
+      // top newel at the deck, bottom newel on the bottom tread, balusters dropping onto the nosings
+      const riseF = (botY-topY)/risers, ghF = 3.0*SV;
+      const capH=Math.max(2.5,0.16*SV), subH=Math.max(2,0.11*SV), botH2=Math.max(2,0.12*SV);
+      const hp2=Math.max(2.2,0.16*SV), railBotOff = ghF - 0.35*SV - botH2;
+      const xA=sxL, yA=topY - ghF;                          // top rail at the deck newel
+      const xB=sxR, yB=(topY + (risers-1)*riseF) - ghF;     // top rail at the bottom-tread newel
+      const polyF=function(xa,ya,xb,yb,h){
+        s += '<path d="M'+xa+' '+ya+' L'+xb+' '+yb+' L'+xb+' '+(yb+h)+' L'+xa+' '+(ya+h)+' Z" fill="#F2EFE7" stroke="#0C0E11" stroke-width="1.1"/>';
+        upd(xa,ya); upd(xb,yb+h);
+      };
+      polyF(xA, yA, xB, yB, capH);
+      polyF(xA, yA+capH, xB, yB+capH, subH);
+      polyF(xA, yA+railBotOff, xB, yB+railBotOff, botH2);
+      const bw2=Math.max(1.6,0.11*SV), nBF=Math.max(3, risers+1);
+      for (let b3=1;b3<nBF;b3++){
+        const bt=b3/nBF, bx2=xA+(xB-xA)*bt, yb=yA+(yB-yA)*bt+capH+subH;
+        const stepY = topY + Math.min(risers-1, Math.floor(bt*risers)+1)*riseF;
+        rc(bx2-bw2/2, yb, bw2, Math.max(3,(stepY-1)-yb), 0.9, null, '#F2EFE7');
+      }
+      [[xA,yA,topY],[xB,yB,topY+(risers-1)*riseF]].forEach(function(pp){
+        rc(pp[0]-hp2, pp[1]-3, 2*hp2, pp[2]-(pp[1]-3), 1.3, null, '#F2EFE7');
+        rc(pp[0]-hp2-0.045*SV, pp[1]-6, 2*hp2+0.09*SV, 3.2, 1.2, null, '#F2EFE7');
+        rc(pp[0]-hp2-0.075*SV, pp[1]-9, 2*hp2+0.15*SV, 3.2, 1.2, null, '#F2EFE7');
       });
     }
     if (sono){ footing(sxL+0.35*SV, 0.7*SV); footing(sxR-0.35*SV, 0.7*SV); }
