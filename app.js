@@ -333,18 +333,23 @@ function resolve(){
       }
     }
     if (railOn){
-      const rr = toeRun, midDrop = toeDrop, rdz = rr*slope/runT;   // deck edge -> bottom newel
+      // rail spans deck edge -> bottom newel, which sits ON the bottom tread (bz = (n-1.5)*runL).
+      // heights are measured above the STAIR TREAD line (yTop - rise/runL*bz - rise/2) so the rail
+      // is parallel to the treads and always lands BELOW the newel caps at both ends.
+      const rbz = Math.max(runL, (n-1.5)*runL), rdz = rbz*slope/runT;
+      const RH = 2.75, RHlo = 0.5;                        // top rail ~33" and lower rail ~6" above treads
+      const railY = function(off){ return yTop - rise/2 + off - (rise/runL)*(rbz/2); };
       [cx - sw/2, cx + sw/2].forEach(function(hx){
-        [3.0, 0.35].forEach(function(hy){
-          T.push({t:'rail', sh:'box', lx:hx, ly:yTop - midDrop/2 + hy, lz:z0 + dir*(rr/2),
+        [RH, RHlo].forEach(function(off){
+          T.push({t:'rail', sh:'box', lx:hx, ly:railY(off), lz:z0 + dir*(rbz/2),
             dx:0.12, dy:0.12, dz:rdz, rotX:ang, tier:tier, m:{pos:'stair'}});
         });
-        const nB = Math.max(2, Math.ceil(rr/0.32));
+        const nB = Math.max(2, Math.ceil(rbz/0.34));
         for (let k=1;k<nB;k++){
-          const bz = k*(rr/nB);
-          const surfY = yTop - drop*(bz/runT);       // tread/nosing line at this run
-          T.push({t:'baluster', sh:'box', lx:hx, ly:surfY + 1.45, lz:z0 + dir*bz,
-            dx:0.08, dy:2.9, dz:0.08, tier:tier, m:{}});   // foot on the tread, ~35" to the rail
+          const bz = k*(rbz/nB);
+          const ty = yTop - (rise/runL)*bz - rise/2;      // stair tread walking line at this run
+          T.push({t:'baluster', sh:'box', lx:hx, ly:ty + (RH-0.05)/2, lz:z0 + dir*bz,
+            dx:0.08, dy:RH-0.1, dz:0.08, tier:tier, m:{}});   // foot on the tread, up to just under the rail
         }
       });
     }
@@ -363,15 +368,18 @@ function resolve(){
     T.push({t:'stairhdr', sh:'box', lx:0, ly:hft-0.36, lz:-0.24, dx:sw+0.5, dy:0.62, dz:0.13, tier:tier, m:{plies:2}});
     if (!swb){
       flight(tier, T, risers, rise, sw, hft, 0, 0, 1, ron);
-      const footZ = (risers-1)*runL;   // at the bottom of the stair (stringer toe / bottom newel)
+      const footZ = (risers-1)*runL;   // footing bears the stringer toe at the bottom of the carriage
       [-(sw/2-0.45), sw/2-0.45].forEach(function(fx){
         const sd = (risers > 10 || sw >= 5) ? 10 : 8;
         T.push({t:'footing', sh:'cyl', lx:fx, ly:0.11, lz:footZ, r:sd/24, len:0.22, tier:tier, m:{dia:sd, kind:'sono'}});
       });
       if (ron){
+        const treadY = hft - rise*(risers-1);   // bottom tread walking surface
+        const nz = (risers-1.5)*runL;           // bottom tread center: newel lands here, rail dies into it
         [-sw/2, sw/2].forEach(function(hx){
-          T.push({t:'railpost', sh:'box', lx:hx, ly:1.6, lz:footZ, dx:0.2, dy:3.2, dz:0.2, tier:tier, m:{}});
-          T.push({t:'railpost', sh:'box', lx:hx, ly:3.26, lz:footZ, dx:0.28, dy:0.12, dz:0.28, tier:tier, m:{cap:true}});
+          // newel lands on the full-width bottom tread (which wraps ~1"+ of composite around its base)
+          T.push({t:'railpost', sh:'box', lx:hx, ly:treadY + 1.5,  lz:nz, dx:0.22, dy:3.0, dz:0.22, tier:tier, m:{}});
+          T.push({t:'railpost', sh:'box', lx:hx, ly:treadY + 3.06, lz:nz, dx:0.3, dy:0.12, dz:0.3, tier:tier, m:{cap:true}});
         });
       }
     } else {
