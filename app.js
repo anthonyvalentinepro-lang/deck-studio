@@ -1745,30 +1745,21 @@ function renderElevation(kind){
     ln(sxL, topY, sxL, botY, 1.6); ln(sxR, topY, sxR, botY, 1.6);
     for (let r2=1; r2<risers; r2++){ const yy = topY + r2*((botY-topY)/risers); ln(sxL, yy, sxR, yy, 1); }
     if (RAILON){
-      // stair guard shown as a raked rail (same cap/sub/bottom system as the deck + side elevation):
-      // top newel at the deck, bottom newel on the bottom tread, balusters dropping onto the nosings
-      const riseF = (botY-topY)/risers, ghF = 3.0*SV;
-      const capH=Math.max(2.5,0.16*SV), subH=Math.max(2,0.11*SV), botH2=Math.max(2,0.12*SV);
-      const hp2=Math.max(2.2,0.16*SV), railBotOff = ghF - 0.35*SV - botH2;
-      const xA=sxL, yA=topY - ghF;                          // top rail at the deck newel
-      const xB=sxR, yB=(topY + (risers-1)*riseF) - ghF;     // top rail at the bottom-tread newel
-      const polyF=function(xa,ya,xb,yb,h){
-        s += '<path d="M'+xa+' '+ya+' L'+xb+' '+yb+' L'+xb+' '+(yb+h)+' L'+xa+' '+(ya+h)+' Z" fill="#F2EFE7" stroke="#0C0E11" stroke-width="1.1"/>';
-        upd(xa,ya); upd(xb,yb+h);
+      // FRONT view: the stair descends toward the viewer, so each side guard is seen EDGE-ON
+      // (vertical) - NOT a raked side-profile. Show both flanking guards as posts + top rail +
+      // pickets seen end-on, top newel at the deck and bottom newel at the bottom tread, both capped.
+      const riseF=(botY-topY)/risers, ghF=3.0*SV, hpF=Math.max(2.4,0.16*SV);
+      const railTopY=topY-ghF, botStepY=topY+(risers-1)*riseF, botRailY=botStepY-ghF;
+      const capA=function(gx,yc){
+        rc(gx-hpF-0.05*SV, yc-3.2, 2*hpF+0.10*SV, 3.2, 1.2, null, '#F2EFE7');
+        rc(gx-hpF-0.09*SV, yc-6.4, 2*hpF+0.18*SV, 3.2, 1.2, null, '#F2EFE7');
       };
-      polyF(xA, yA, xB, yB, capH);
-      polyF(xA, yA+capH, xB, yB+capH, subH);
-      polyF(xA, yA+railBotOff, xB, yB+railBotOff, botH2);
-      const bw2=Math.max(1.6,0.11*SV), nBF=Math.max(3, risers+1);
-      for (let b3=1;b3<nBF;b3++){
-        const bt=b3/nBF, bx2=xA+(xB-xA)*bt, yb=yA+(yB-yA)*bt+capH+subH;
-        const stepY = topY + Math.min(risers-1, Math.floor(bt*risers)+1)*riseF;
-        rc(bx2-bw2/2, yb, bw2, Math.max(3,(stepY-1)-yb), 0.9, null, '#F2EFE7');
-      }
-      [[xA,yA,topY],[xB,yB,topY+(risers-1)*riseF]].forEach(function(pp){
-        rc(pp[0]-hp2, pp[1]-3, 2*hp2, pp[2]-(pp[1]-3), 1.3, null, '#F2EFE7');
-        rc(pp[0]-hp2-0.045*SV, pp[1]-6, 2*hp2+0.09*SV, 3.2, 1.2, null, '#F2EFE7');
-        rc(pp[0]-hp2-0.075*SV, pp[1]-9, 2*hp2+0.15*SV, 3.2, 1.2, null, '#F2EFE7');
+      [sxL, sxR].forEach(function(gx){
+        // top rail + bottom rail of the guard, seen end-on as short vertical members that step down
+        rc(gx-0.09*SV, railTopY, 0.18*SV, botStepY-railTopY, 1.2, null, '#F2EFE7');
+        // top newel at the deck, bottom newel at the bottom tread (both capped)
+        rc(gx-hpF, railTopY, 2*hpF, topY-railTopY, 1.4, null, '#F2EFE7'); capA(gx, railTopY);
+        rc(gx-hpF, botRailY, 2*hpF, botStepY-botRailY, 1.4, null, '#F2EFE7'); capA(gx, botRailY);
       });
     }
     if (sono){ footing(sxL+0.35*SV, 0.7*SV); footing(sxR-0.35*SV, 0.7*SV); }
