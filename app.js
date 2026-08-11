@@ -270,6 +270,7 @@ function resolve(){
   function railing(tier, w, d, hft0, cut, includeBack, ox, oz){
     const hft = hft0 + 1/24;   // guard heights measure from the walking surface (decking top)
     const railTop = 3.0, botY = 0.35;
+    const postPts = [];
     railSegs(w, d, cut, includeBack).forEach(function(sg0){
       // post sleeves mount on the deck surface: pull the run inboard so the outer post face
       // lands flush with the fascia instead of overhanging it
@@ -285,18 +286,31 @@ function resolve(){
         add('rail','box',{x:mp.x, y:hft+railTop-0.09, z:mp.z, dx:0.26, dy:0.17, dz:len, tier:tier, m:{pos:'top'}});
         add('rail','box',{x:mp.x, y:hft+botY, z:mp.z, dx:0.19, dy:0.11, dz:len, tier:tier, m:{pos:'bottom'}});
       }
+      const L = (sg.axis==='x') ? w : d;
       const nP = Math.max(2, Math.ceil(len/6)+1);
       for (let p2=0;p2<nP;p2++){
-        const off = Math.max(sg.a+0.28, Math.min(sg.b-0.28, sg.a + p2*(len/(nP-1))));
+        // end posts: snap to the deck corner (L/2-0.12) so two meeting edges SHARE one post; at a
+        // stair-opening end keep 0.28 clearance; interior posts spaced <=6' along the run
+        let off = sg.a + p2*(len/(nP-1));
+        if (p2===0)         off = (Math.abs(sg.a + L/2) < 0.02) ? -(L/2 - 0.12) : sg.a + 0.28;
+        else if (p2===nP-1) off = (Math.abs(sg.b - L/2) < 0.02) ?  (L/2 - 0.12) : sg.b - 0.28;
+        else                off = Math.max(sg.a+0.28, Math.min(sg.b-0.28, off));
         const q = P(off);
-        add('railpost','box',{x:q.x, y:hft+(railTop+0.22)/2, z:q.z, dx:0.32, dy:railTop+0.22, dz:0.32, tier:tier});
-        add('railpost','box',{x:q.x, y:hft+railTop+0.28, z:q.z, dx:0.46, dy:0.11, dz:0.46, tier:tier, m:{cap:true}});
+        postPts.push([q.x, q.z]);
       }
       const nBal = Math.floor(len/0.38);
       for (let b2=1;b2<nBal;b2++){
         const q = P(sg.a + b2*(len/nBal));
         add('baluster','box',{x:q.x, y:hft+botY+0.06+(railTop-0.56)/2, z:q.z, dx:0.09, dy:railTop-0.56, dz:0.09, tier:tier});
       }
+    });
+    // one post per location: a shared deck corner (two edges meeting) dedups into a single post
+    const kept = [];
+    postPts.forEach(function(q){
+      if (kept.some(function(k){ return Math.abs(k[0]-q[0])<0.18 && Math.abs(k[1]-q[1])<0.18; })) return;
+      kept.push(q);
+      add('railpost','box',{x:q[0], y:hft+(railTop+0.22)/2, z:q[1], dx:0.32, dy:railTop+0.22, dz:0.32, tier:tier});
+      add('railpost','box',{x:q[0], y:hft+railTop+0.28, z:q[1], dx:0.46, dy:0.11, dz:0.46, tier:tier, m:{cap:true}});
     });
   }
 
