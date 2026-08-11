@@ -1056,16 +1056,6 @@ function renderPlan(){
       s += '<path d="M'+a2[0]+' '+a2[1]+' m-3.5 -6 l3.5 6 l3.5 -6 z" fill="#0C0E11"/>';
       const lc = P(swp/2, planSl + 13);
       s += '<text x="'+lc[0]+'" y="'+lc[1]+'" text-anchor="middle" font-family="IBM Plex Mono" font-size="9.5" fill="#0C0E11">DN</text>';
-      if (MODE==='decking' && S.rail){
-        // stair guard in plan: double rail line down each side, hollow newel squares at deck + bottom
-        const roS=Math.max(5,0.24*sc), rwS=Math.max(1.6,0.16*sc), psqS=Math.max(4,0.4*sc);
-        [roS, swp-roS].forEach(function(u){
-          tline(u-rwS/2, 0, u-rwS/2, planSl);
-          tline(u+rwS/2, 0, u+rwS/2, planSl);
-          [0, planSl].forEach(function(v){ const q=P(u,v);
-            s += '<rect x="'+(q[0]-psqS/2)+'" y="'+(q[1]-psqS/2)+'" width="'+psqS+'" height="'+psqS+'" fill="#F2EFE7" stroke="#0C0E11" stroke-width="1.3"/>'; });
-        });
-      }
     } else {
       const n1 = Math.ceil(risers/2), n2 = risers - n1;
       let run = (11/12)*sc, Ldp = Math.max(3, planSp.sw)*sc;
@@ -1140,6 +1130,15 @@ function renderPlan(){
     };
     edgeR('left'); edgeR('right'); edgeR('front');
     if (!S.ledger) edgeR('back');
+    // stair guard: run the SAME rail + post engine down each side of the flight, so the top newel
+    // coincides with (dedups into) the deck guard's opening post, one post at the bottom, <=6'-0" OC between
+    if (planSp && planP && planSl > 0 && Math.ceil(S.h/7.5) <= 12){
+      const uEnd = planSp.sw*sc;
+      [0, uEnd].forEach(function(u){
+        const a = planP(u, -ro), b = planP(u, planSl);
+        rseg(Math.min(a[0],b[0]), Math.min(a[1],b[1]), Math.max(a[0],b[0]), Math.max(a[1],b[1]));
+      });
+    }
     finalizeRails();
   }
   // dimensions
@@ -1398,16 +1397,6 @@ function renderPlanTier2(c, W, H, m, availW, availH){
       s += '<path d="M'+a2[0]+' '+a2[1]+' m-3.5 -6 l3.5 6 l3.5 -6 z" fill="#0C0E11"/>';
       const lc = P(swp/2, planSl + 13);
       s += '<text x="'+lc[0]+'" y="'+lc[1]+'" text-anchor="middle" font-family="IBM Plex Mono" font-size="9.5" fill="#0C0E11">DN</text>';
-      if (MODE==='decking' && S.rail){
-        // stair guard in plan: double rail line down each side, hollow newel squares at deck + bottom
-        const roS=Math.max(5,0.24*sc), rwS=Math.max(1.6,0.16*sc), psqS=Math.max(4,0.4*sc);
-        [roS, swp-roS].forEach(function(u){
-          tline(u-rwS/2, 0, u-rwS/2, planSl);
-          tline(u+rwS/2, 0, u+rwS/2, planSl);
-          [0, planSl].forEach(function(v){ const q=P(u,v);
-            s += '<rect x="'+(q[0]-psqS/2)+'" y="'+(q[1]-psqS/2)+'" width="'+psqS+'" height="'+psqS+'" fill="#F2EFE7" stroke="#0C0E11" stroke-width="1.3"/>'; });
-        });
-      }
     } else {
       const n1 = Math.ceil(risers/2), n2 = risers - n1;
       let run = (11/12)*sc, Ldp = Math.max(3, gsp.sw)*sc;
